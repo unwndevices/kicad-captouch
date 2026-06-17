@@ -12,6 +12,7 @@ license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 authors = [{ name = "Ciro Caputo Viglione" }]
 keywords = ["kicad", "capacitive-touch", "footprint", "pcb", "eda", "slider", "trackpad"]
+dependencies = ["shapely>=2.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]

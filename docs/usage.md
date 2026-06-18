@@ -93,6 +93,7 @@ Wheels are continuous, so there are no end dummies.
 ```sh
 captouch trackpad --preset infineon --num-rows 6 --num-cols 6
 captouch trackpad --num-rows 6 --num-cols 6 --mask-shape circle
+captouch trackpad --num-rows 7 --num-cols 7 --mask-shape circle --clip-mode conform
 captouch trackpad --mask-shape rrect --corner-radius 4
 ```
 
@@ -108,14 +109,41 @@ guard and the DRC gate watch.
 
 - `rrect` rounds the corners by `--corner-radius` (mm); works at any matrix size.
 - `circle` clips the matrix to a disk of `--radius` (mm; default the inscribed
-  `0.5·min(width,height)`). A diamond is kept only when its **centre** is inside
-  the mask, so every surviving node stays bridgeable and DRC-clean — the corner
-  nodes are dropped, exactly as vendors do for round trackpads (their firmware
-  treats the rim as partial/phantom nodes). A circle therefore needs a roughly
-  **square** matrix (`num_rows ≈ num_cols`); an elongated one whose outer column
-  the disk can't reach is rejected with an error pointing you at a larger radius
-  or a squarer matrix. The mask shapes the copper, the `F.Fab` outline, and the
-  courtyard; it never changes the `Rx`/`Tx` pin count or numbering.
+  `0.5·min(width,height)`). A circle needs a roughly **square** matrix
+  (`num_rows ≈ num_cols`); an elongated one whose outer column the disk can't reach
+  is rejected with an error pointing you at a larger radius or a squarer matrix.
+
+The mask shapes the copper, the `F.Fab` outline, and the courtyard; it never
+changes the `Rx`/`Tx` pin count or numbering.
+
+**Clip mode.** `--clip-mode {inscribe,conform}` decides how a *curved* mask
+(circle/rrect) treats the diamonds it crosses (no effect on `rect`):
+
+- `inscribe` (default) keeps a diamond only when its **centre** is inside the
+  mask, then clips — so rim diamonds are kept whole or dropped whole. The boundary
+  is a chunky inscribed lattice, but every survivor stays ≥~half present, carries
+  its bridge via, and bridges contiguously.
+- `conform` clips **every** diamond/neck/strap to the mask boundary, so the copper
+  edge follows the curve exactly (Azoteq AZD068 §6, Fig 6.3). Rim diamonds become
+  cut **partial channels**. Bridges are placed only where the via centres still
+  clear the cut edge, and any rim diamond a bridge can't reach is dropped, so the
+  copper stays fully connected and DRC-clean.
+
+Either way a curved mask shrinks some edge channels' electrode area. The generator
+reports the channels left below **50 %** of their full area (Azoteq's rule of thumb
+for disabling a channel in firmware):
+
+```
+$ captouch trackpad --num-rows 7 --num-cols 7 --mask-shape circle --clip-mode conform
+wrote examples/CT_Trackpad.kicad_mod
+wrote examples/CT_Trackpad.kicad_sym
+  mutual-cap trackpad: 7x7 diamonds (7 Rx + 7 Tx, 49 nodes), …
+  4 partial channel(s) under 50% of full electrode area (Azoteq AZD068 §6 — consider disabling these in firmware):
+    - Rx1: 49% area remaining
+    - Rx7: 49% area remaining
+    - Tx1: 49% area remaining
+    - Tx7: 49% area remaining
+```
 
 ## Fab-rule guards
 
@@ -168,9 +196,11 @@ captouch gui            # or: captouch-gui
 
 - A **Widget** selector swaps the slider / wheel / trackpad parameter panel.
 - A **Preset** menu loads vendor starting points into the form.
-- The trackpad panel has a **Mask** group — shape (rect / rrect / circle) with a
+- The trackpad panel has a **Mask** group — shape (rect / rrect / circle), a
+  **clip mode** (inscribe / conform, active only for a curved mask), and a
   corner-radius (rrect) or radius (circle; *Auto* = inscribed) control — that
-  reshapes the live preview.
+  reshapes the live preview. The status bar flags any channels a mask shrinks
+  below 50 % area so you can disable them in firmware.
 - The **preview** renders the *same* geometry the exporters serialise (WYSIWYG),
   with zoom/pan, **Fit**, and per-layer toggles (incl. `F.Cu`, `B.Cu`, and vias
   for the trackpad).

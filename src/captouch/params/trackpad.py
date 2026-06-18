@@ -36,7 +36,13 @@ from dataclasses import dataclass, replace
 
 from .slider import SliderError
 
-__all__ = ["TrackpadParams", "TrackpadError", "validate_trackpad", "TRACKPAD_PRESETS"]
+__all__ = [
+    "TrackpadParams",
+    "TrackpadError",
+    "validate_trackpad",
+    "TRACKPAD_PRESETS",
+    "MASK_SHAPES",
+]
 
 #: Min annular ring (mm) required between a via's drill and its outer diameter
 #: (i.e. ``via_diameter >= via_drill + 2 * MIN_ANNULAR``). 0.1 mm = 4 mil, a
@@ -48,6 +54,9 @@ MIN_ANNULAR = 0.1
 MIN_LINES = 3
 MAX_LINES = 16
 MAX_NODES = 100
+
+#: Valid outer-mask outlines the diamond matrix can be shaped to.
+MASK_SHAPES = ("rect", "rrect", "circle")
 
 
 class TrackpadError(SliderError):
@@ -90,6 +99,27 @@ class TrackpadParams:
         pad edge; §5.6).
     via_diameter:
         Outer copper diameter of the bridge vias (``>= via_drill + 2*MIN_ANNULAR``).
+    mask_shape:
+        Outer outline the diamond matrix is shaped to: ``"rect"`` (default, the
+        full panel rectangle), ``"rrect"`` (rounded rectangle — fillet
+        ``corner_radius``), or ``"circle"`` (a disk of :attr:`effective_radius`).
+        The matrix extent (``width``/``height``) and the ``R×C`` channel count are
+        unchanged by the mask — only *which* copper survives. A circle is only
+        sensible when ``width ≈ height`` (a square-ish matrix); an elongated matrix
+        crops to its shorter dimension.
+    corner_radius:
+        Rounded-rectangle fillet radius (mm); used only when ``mask_shape ==
+        "rrect"``. Must be ``0 < corner_radius <= min(width, height) / 2``.
+    radius:
+        Circle-mask radius (mm); used only when ``mask_shape == "circle"``. ``None``
+        resolves to the inscribed default ``0.5 * min(width, height)`` (the largest
+        disk the matrix contains — for a square matrix it touches all four edge
+        midpoints and removes the corners). See :attr:`effective_radius`.
+    min_feature:
+        Smallest copper-fragment width (mm) a non-rect mask is allowed to leave
+        after clipping; thinner slivers/crescents at a curved boundary are dropped
+        (the CLI defaults this to the active fab profile's min track width). Unused
+        for ``mask_shape == "rect"``.
     name:
         Base name for the emitted footprint / symbol.
     """
@@ -101,6 +131,10 @@ class TrackpadParams:
     bridge_width: float = 0.2
     via_drill: float = 0.3
     via_diameter: float = 0.6
+    mask_shape: str = "rect"
+    corner_radius: float = 0.0
+    radius: float | None = None
+    min_feature: float = 0.1
     name: str = "CT_Trackpad"
 
     # -- resolved (derived) quantities ------------------------------------- #
@@ -143,6 +177,17 @@ class TrackpadParams:
     def height(self) -> float:
         """Overall pad height (mm); half-diamond edges → ``num_rows · pitch``."""
         return self.num_rows * self.diamond_pitch
+
+    @property
+    def effective_radius(self) -> float:
+        """Resolved circle-mask radius: explicit ``radius`` or the inscribed default.
+
+        The inscribed default ``0.5 · min(width, height)`` is the largest disk the
+        matrix rectangle contains. (Only meaningful when ``mask_shape == "circle"``.)
+        """
+        if self.radius is not None:
+            return self.radius
+        return 0.5 * min(self.width, self.height)
 
     def resolved(self) -> "TrackpadParams":
         """Return a copy (parity with slider/wheel; nothing to resolve here)."""
@@ -202,7 +247,44 @@ def validate_trackpad(p: TrackpadParams) -> TrackpadParams:
             f"{p.half_diag:.3f} mm so each via sits well inside a diamond, clear of "
             f"its tip and of the perpendicular axis"
         )
+    _validate_mask(p)
     return p
+
+
+def _validate_mask(p: TrackpadParams) -> None:
+    """Validate the outer-mask params. (Whether a circle/rrect orphans an entire
+    row or column depends on the actual clipped copper and is hard-errored at
+    build time, not here.)"""
+    if p.mask_shape not in MASK_SHAPES:
+        raise TrackpadError(
+            f"mask_shape must be one of {MASK_SHAPES}, got {p.mask_shape!r}"
+        )
+    if p.min_feature < 0:
+        raise TrackpadError(f"min_feature must be >= 0, got {p.min_feature}")
+    half_min = min(p.width, p.height) / 2.0
+    if p.mask_shape == "rrect":
+        if not 0 < p.corner_radius <= half_min:
+            raise TrackpadError(
+                f"corner_radius must be 0 < r <= min(width, height)/2 = {half_min:.3f} mm "
+                f"for a rounded-rect mask, got {p.corner_radius}"
+            )
+    elif p.corner_radius:
+        raise TrackpadError(
+            f"corner_radius is only used with mask_shape='rrect', "
+            f"but mask_shape='{p.mask_shape}' and corner_radius={p.corner_radius}"
+        )
+    if p.mask_shape == "circle":
+        r = p.effective_radius
+        if not 0 < r <= half_min:
+            raise TrackpadError(
+                f"circle radius must be 0 < r <= min(width, height)/2 = {half_min:.3f} mm "
+                f"(the inscribed disk; larger clips no copper), got {r:.3f}"
+            )
+    elif p.radius is not None:
+        raise TrackpadError(
+            f"radius is only used with mask_shape='circle', "
+            f"but mask_shape='{p.mask_shape}' and radius={p.radius}"
+        )
 
 
 #: Named starting points drawn from the guidelines doc (§4.2 / §4.3 tables).

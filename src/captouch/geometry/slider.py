@@ -32,7 +32,6 @@ from ._base import (
     SHAPE_TO_KIND,
     Electrode,
     GeometryError,
-    Point,
     anchor_point,
     round_corners,
     tip_relief_radius,

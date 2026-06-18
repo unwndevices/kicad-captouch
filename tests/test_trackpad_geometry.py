@@ -10,7 +10,7 @@ from shapely.ops import unary_union
 
 from captouch.geometry import build_trackpad
 from captouch.geometry._base import rounded_rect_points
-from captouch.params import TrackpadParams
+from captouch.params import TrackpadError, TrackpadParams
 
 SIZES = [(3, 3), (3, 5), (4, 5), (5, 5)]
 
@@ -133,13 +133,53 @@ def test_courtyard_stays_rect_until_copper_is_clipped(shape, kw):
     assert geo.courtyard_outline[0] == "rect"
 
 
-def test_rect_copper_unchanged_by_non_rect_mask():
-    # Stage A: the mask only changes documentation, never the copper polygons.
-    base = build_trackpad(TrackpadParams(num_rows=4, num_cols=4))
+def test_clipped_copper_stays_inside_the_mask():
+    # Every surviving piece (F.Cu + B.Cu) lies within the mask region, with a tiny
+    # tolerance for the polyline-approximated disk boundary.
+    p = TrackpadParams(num_rows=5, num_cols=5, mask_shape="circle")
+    geo = build_trackpad(p)
+    r = p.effective_radius
+    for n in geo.nets:
+        for poly in [*n.fcu, *n.bcu]:
+            assert poly.bounds[0] >= -r - 0.05 and poly.bounds[2] <= r + 0.05
+            assert poly.bounds[1] >= -r - 0.05 and poly.bounds[3] <= r + 0.05
+
+
+def test_circle_drops_outer_columns_orphan_errors_on_elongated():
+    # A square matrix clips cleanly; an elongated one cannot inscribe a circle that
+    # reaches its outer columns, so it hard-errors (the chosen orphan policy).
+    build_trackpad(TrackpadParams(num_rows=5, num_cols=5, mask_shape="circle"))
+    with pytest.raises(TrackpadError, match="outside the circle mask"):
+        build_trackpad(TrackpadParams(num_rows=3, num_cols=8, mask_shape="circle"))
+
+
+def test_clipped_rx_rows_are_single_connected_pieces():
+    geo = build_trackpad(TrackpadParams(num_rows=5, num_cols=5, mask_shape="circle"))
+    for n in geo.rx_nets:
+        assert len(n.fcu) == 1  # keep-largest guarantees one galvanic Rx piece
+
+
+def test_clipped_tx_islands_are_all_bridged():
+    # Every surviving Tx column resolves to one electrically-connected net: its
+    # F.Cu diamonds are joined by (diamonds-1) B.Cu straps when >1 survive.
+    geo = build_trackpad(TrackpadParams(num_rows=5, num_cols=5, mask_shape="circle"))
+    for n in geo.tx_nets:
+        assert len(n.bcu) == max(0, len(n.fcu) - 1)
+        assert len(n.vias) == 2 * len(n.bcu)
+
+
+def test_curved_mask_clips_corner_copper():
+    # Stage B: a rounded-rect / circle mask actually clips the copper, removing
+    # corner area the rect mask keeps.
+    def total_fcu(geo):
+        return sum(p.area for n in geo.nets for p in n.fcu)
+
+    rect = build_trackpad(TrackpadParams(num_rows=4, num_cols=4))
     rr = build_trackpad(TrackpadParams(num_rows=4, num_cols=4,
-                                       mask_shape="rrect", corner_radius=2.0))
-    for a, b in zip(base.nets, rr.nets):
-        assert [p.area for p in a.fcu] == pytest.approx([p.area for p in b.fcu])
+                                       mask_shape="rrect", corner_radius=3.0))
+    circ = build_trackpad(TrackpadParams(num_rows=4, num_cols=4, mask_shape="circle"))
+    assert total_fcu(rr) < total_fcu(rect)      # corners shaved
+    assert total_fcu(circ) < total_fcu(rr)      # a disk removes more than a fillet
 
 
 def test_rounded_rect_points_form_valid_polygon():

@@ -25,16 +25,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from shapely.geometry import MultiPolygon, Polygon, box
+from shapely.geometry import MultiPolygon, Point as GeoPoint, Polygon, box
 from shapely.ops import unary_union
 
-from ..params import TrackpadParams, validate_trackpad
-from ._base import ROUND, GeometryError, Point, anchor_point
+from ..params import TrackpadError, TrackpadParams, validate_trackpad
+from ._base import ARC_QUAD_SEGS, ROUND, GeometryError, Point, anchor_point
 
 __all__ = ["Via", "TrackpadNet", "TrackpadGeometry", "build_trackpad"]
 
 #: Polygons below this area (mm²) after clipping are discarded as fab/DRC slivers.
 _SLIVER_AREA = 1e-3
+
+#: Quarter-circle segments for the curved mask boundary (disk / rounded-rect
+#: clip). Finer than the lean pad fillets so the clipped copper edge and the
+#: F.Fab outline read as smooth curves, not coarse facets.
+_CLIP_QUAD_SEGS = 16
 
 
 @dataclass(frozen=True)
@@ -116,15 +121,56 @@ def _diamond(cx: float, cy: float, d: float) -> Polygon:
     return Polygon([(cx - d, cy), (cx, cy - d), (cx + d, cy), (cx, cy + d)])
 
 
-def _normalize(geom) -> list[Polygon]:
-    """Clip leftovers → a list of non-sliver Polygons (drops empties / lines)."""
+def _normalize(geom, min_width: float = 0.0) -> list[Polygon]:
+    """Clip leftovers → a list of non-sliver Polygons (drops empties / lines).
+
+    With ``min_width > 0`` each surviving part is also morphologically *opened*
+    (erode then dilate by ``min_width/2``): a fragment thinner than ``min_width``
+    everywhere vanishes, and acute tips/crescents left where a curved mask grazes
+    a diamond are trimmed back to ``min_width`` — the area filter alone keeps such
+    tips. ``min_width == 0`` (the rect mask) is the original behaviour exactly.
+    """
     if geom.is_empty:
         return []
     parts = list(geom.geoms) if isinstance(geom, MultiPolygon) else [geom]
-    return [
-        g for g in parts
-        if isinstance(g, Polygon) and not g.is_empty and g.area >= _SLIVER_AREA
-    ]
+    out: list[Polygon] = []
+    for g in parts:
+        if not (isinstance(g, Polygon) and not g.is_empty and g.area >= _SLIVER_AREA):
+            continue
+        if min_width > 0:
+            out.extend(_open_or_drop(g, min_width))
+        else:
+            out.append(g)
+    return out
+
+
+def _open_or_drop(g: Polygon, w: float) -> list[Polygon]:
+    """Morphologically open *g* by ``w/2``; return the non-sliver pieces (possibly
+    none, or several if the open severs a thin waist)."""
+    opened = g.buffer(-w / 2.0, quad_segs=ARC_QUAD_SEGS).buffer(w / 2.0, quad_segs=ARC_QUAD_SEGS)
+    if opened.is_empty:
+        return []
+    pieces = list(opened.geoms) if isinstance(opened, MultiPolygon) else [opened]
+    return [p for p in pieces if isinstance(p, Polygon) and p.area >= _SLIVER_AREA]
+
+
+def _mask_clip(params: TrackpadParams, x0: float, y0: float, x1: float, y1: float):
+    """The Shapely region the diamond lattice is intersected with, per ``mask_shape``.
+
+    ``rect`` is the exact panel box (so rect output is byte-identical). ``rrect``
+    is that box with ``corner_radius`` fillets. ``circle`` is a disk *inset* by
+    ``min_feature/2`` from :attr:`effective_radius`, so the boundary never cuts a
+    diamond thinner than the fab minimum.
+    """
+    shape = params.mask_shape
+    if shape == "circle":
+        r_eff = params.effective_radius - params.min_feature / 2.0
+        return GeoPoint(0.0, 0.0).buffer(r_eff, quad_segs=_CLIP_QUAD_SEGS)
+    if shape == "rrect":
+        cr = params.corner_radius
+        return box(x0 + cr, y0 + cr, x1 - cr, y1 - cr).buffer(
+            cr, quad_segs=_CLIP_QUAD_SEGS, join_style="round")
+    return box(x0, y0, x1, y1)
 
 
 def build_trackpad(params: TrackpadParams) -> TrackpadGeometry:
@@ -143,7 +189,21 @@ def build_trackpad(params: TrackpadParams) -> TrackpadGeometry:
     H = R * P
     x0, y0 = -W / 2.0, -H / 2.0
     x1, y1 = W / 2.0, H / 2.0
-    clip = box(x0, y0, x1, y1)
+    clip = _mask_clip(params, x0, y0, x1, y1)
+    # A curved mask (circle/rrect) leaves thin tips where it grazes a diamond; the
+    # rect mask cuts only clean half-diamonds and must stay byte-identical, so its
+    # min-width guard is disabled (0).
+    min_w = 0.0 if params.mask_shape == "rect" else params.min_feature
+
+    # A diamond joins the pad only when its *centre* is inside the mask. This keeps
+    # every surviving diamond at least ~half-present — enough to carry a bridge via
+    # and to bridge contiguously to its neighbour — instead of leaving thin partial
+    # fragments that float unconnected or crowd the perpendicular axis. The kept
+    # diamonds are still clipped to the mask, so the copper boundary follows the
+    # curve. For the rect mask every centre (incl. the edge half-diamonds, whose
+    # centres lie on the panel edge) is inside, so the lattice is unchanged.
+    def _inside(px: float, py: float) -> bool:
+        return clip.covers(GeoPoint(px, py))
 
     nets: list[TrackpadNet] = []
 
@@ -151,17 +211,31 @@ def build_trackpad(params: TrackpadParams) -> TrackpadGeometry:
     # Ordered top→bottom (KiCad y is down, so row r=0 at y0 is the top row).
     for r in range(R):
         cy = y0 + (r + 0.5) * P
-        pieces = [_diamond(x0 + c * P, cy, d) for c in range(C + 1)]
-        for c in range(C):
-            nx0 = x0 + c * P + d - bw
-            nx1 = x0 + (c + 1) * P - d + bw
-            pieces.append(box(nx0, cy - bw / 2.0, nx1, cy + bw / 2.0))
-        fcu = _normalize(unary_union(pieces).intersection(clip))
-        if len(fcu) != 1:
-            raise GeometryError(
-                f"Rx row {r} did not resolve to one connected polygon "
-                f"({len(fcu)} pieces); check bridge_width vs diamond geometry"
+        kept = {c for c in range(C + 1) if _inside(x0 + c * P, cy)}
+        if not kept:
+            raise TrackpadError(
+                f"Rx row {r + 1} lies entirely outside the {params.mask_shape} mask "
+                f"— use a larger radius or a more square matrix (num_rows ≈ num_cols)"
             )
+        pieces = [_diamond(x0 + c * P, cy, d) for c in sorted(kept)]
+        for c in range(C):  # neck only between two kept, adjacent diamonds
+            if c in kept and c + 1 in kept:
+                nx0 = x0 + c * P + d - bw
+                nx1 = x0 + (c + 1) * P - d + bw
+                pieces.append(box(nx0, cy - bw / 2.0, nx1, cy + bw / 2.0))
+        fcu = _normalize(unary_union(pieces).intersection(clip), min_w)
+        if params.mask_shape == "rect":
+            if len(fcu) != 1:
+                raise GeometryError(
+                    f"Rx row {r} did not resolve to one connected polygon "
+                    f"({len(fcu)} pieces); check bridge_width vs diamond geometry"
+                )
+        elif len(fcu) > 1:
+            # A curved mask can still sever a boundary neck pinched by the open;
+            # an Rx net is one galvanic F.Cu piece (no straps), so a detached arc
+            # would be floating copper (ST AN2869). Keep the largest (the row
+            # centreline) and drop the islands.
+            fcu = [max(fcu, key=lambda g: g.area)]
         nets.append(TrackpadNet(
             pad_number=str(r + 1),
             pin_name=f"Rx{r + 1}",
@@ -174,22 +248,28 @@ def build_trackpad(params: TrackpadParams) -> TrackpadGeometry:
     # Ordered left→right; pad numbers continue after the Rx rows.
     for c in range(C):
         cx = x0 + (c + 0.5) * P
-        diamonds = [_diamond(cx, y0 + k * P, d) for k in range(R + 1)]
-        fcu = _normalize(unary_union(diamonds).intersection(clip))
+        kept = {k for k in range(R + 1) if _inside(cx, y0 + k * P)}
+        if not kept:
+            raise TrackpadError(
+                f"Tx column {c + 1} lies entirely outside the {params.mask_shape} mask "
+                f"— use a larger radius or a more square matrix (num_rows ≈ num_cols)"
+            )
+        diamonds = [_diamond(cx, y0 + k * P, d) for k in sorted(kept)]
+        fcu = _normalize(unary_union(diamonds).intersection(clip), min_w)
         straps: list[Polygon] = []
         vias: list[Via] = []
-        for k in range(R):
-            yb = y0 + k * P  # lower diamond centre
-            yt = y0 + (k + 1) * P  # upper diamond centre
-            v_lo_y = yb + voff  # inside lower diamond, below its top vertex
-            v_hi_y = yt - voff  # inside upper diamond, above its bottom vertex
+        for k in range(R):  # bridge only between two kept, adjacent diamonds
+            if k not in kept or k + 1 not in kept:
+                continue
+            v_lo_y = y0 + k * P + voff  # inside lower diamond, below its top vertex
+            v_hi_y = y0 + (k + 1) * P - voff  # inside upper diamond, above its bottom vertex
             vias.append(Via((round(cx, ROUND), round(v_lo_y, ROUND))))
             vias.append(Via((round(cx, ROUND), round(v_hi_y, ROUND))))
             straps.append(box(
                 cx - bw / 2.0, v_lo_y - via_d / 2.0,
                 cx + bw / 2.0, v_hi_y + via_d / 2.0,
             ))
-        bcu = _normalize(unary_union(straps).intersection(clip))
+        bcu = _normalize(unary_union(straps).intersection(clip), min_w) if straps else []
         nets.append(TrackpadNet(
             pad_number=str(R + c + 1),
             pin_name=f"Tx{c + 1}",

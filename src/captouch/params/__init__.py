@@ -16,6 +16,12 @@ from .slider import (
     SliderParams,
     validate_slider,
 )
+from .trackpad import (
+    TRACKPAD_PRESETS,
+    TrackpadError,
+    TrackpadParams,
+    validate_trackpad,
+)
 from .wheel import (
     WHEEL_PRESETS,
     WheelError,
@@ -32,4 +38,8 @@ __all__ = [
     "WheelError",
     "validate_wheel",
     "WHEEL_PRESETS",
+    "TrackpadParams",
+    "TrackpadError",
+    "validate_trackpad",
+    "TRACKPAD_PRESETS",
 ]

@@ -13,6 +13,7 @@ import argparse
 from dataclasses import replace
 from pathlib import Path
 
+from . import __version__
 from .export import footprint, symbol
 from .geometry import build_slider, build_trackpad, build_wheel
 from .params import (
@@ -349,17 +350,30 @@ def _add_trackpad_parser(sub: argparse._SubParsersAction) -> None:
 def _gui(args: argparse.Namespace) -> int:
     try:
         from .gui import main as gui_main  # lazy: keeps PySide6 optional
+        from .gui.app import MainWindow
     except ImportError as exc:
         print(
             f"error: the GUI needs PySide6 ({exc}). "
             f"Install it with: pip install 'kicad-captouch[gui]'"
         )
         return 2
+    if args.check:
+        # Non-blocking smoke test: build the app + window (offscreen-friendly) and
+        # exit without entering the event loop. Used to verify a packaged binary.
+        from PySide6.QtWidgets import QApplication
+
+        app = QApplication.instance() or QApplication([])
+        MainWindow()
+        del app
+        print("gui ok")
+        return 0
     return gui_main([])
 
 
 def _add_gui_parser(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("gui", help="launch the live-preview desktop app")
+    p.add_argument("--check", action="store_true",
+                   help="construct the GUI and exit (smoke test; no window loop)")
     p.set_defaults(func=_gui)
 
 
@@ -389,6 +403,7 @@ def main(argv: list[str] | None = None) -> int:
         prog="captouch",
         description="Parametric capacitive-touch footprint generator for KiCad.",
     )
+    parser.add_argument("--version", action="version", version=f"captouch {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
     _add_slider_parser(sub)
     _add_wheel_parser(sub)

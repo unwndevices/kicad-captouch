@@ -2,7 +2,24 @@
 
 from __future__ import annotations
 
+import pytest
+
+from captouch import __version__
 from captouch.cli import main
+
+
+def test_version_flag_prints_version_and_exits(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["--version"])
+    assert exc.value.code == 0
+    assert __version__ in capsys.readouterr().out
+
+
+def test_gui_check_constructs_and_exits(capsys):
+    pytest.importorskip("PySide6")
+    rc = main(["gui", "--check"])
+    assert rc == 0
+    assert "gui ok" in capsys.readouterr().out
 
 
 def test_slider_default_writes_files_and_exits_zero(tmp_path):

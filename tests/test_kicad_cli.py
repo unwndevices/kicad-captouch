@@ -167,6 +167,36 @@ def test_trackpad_footprint_renders(tmp_path):
     assert (svg_dir / "CT_Trackpad.svg").exists()
 
 
+@pytest.mark.parametrize("kw", [
+    {"mask_shape": "rrect", "corner_radius": 2.0}, {"mask_shape": "circle"},
+])
+def test_trackpad_masked_footprint_renders(kw, tmp_path):
+    geo = build_trackpad(TrackpadParams(name="CT_Trackpad", num_rows=4, num_cols=4, **kw))
+    pretty = tmp_path / "lib.pretty"
+    pretty.mkdir()
+    (pretty / "CT_Trackpad.kicad_mod").write_text(footprint.trackpad_footprint_text(geo))
+    svg_dir = tmp_path / "svg"
+    svg_dir.mkdir()
+    proc = _run("fp", "export", "svg", "--footprint", "CT_Trackpad",
+                "--output", str(svg_dir), str(pretty))
+    assert proc.returncode == 0 and "Error" not in proc.stdout, proc.stdout + proc.stderr
+    assert (svg_dir / "CT_Trackpad.svg").exists()
+
+
+@pytest.mark.parametrize("kw", [
+    {"mask_shape": "rrect", "corner_radius": 2.0}, {"mask_shape": "circle"},
+])
+def test_trackpad_masked_outline_drc_clean(kw, tmp_path):
+    # Stage A: copper is still the full rectangle, so a rrect/circle F.Fab outline
+    # must not perturb DRC — it stays as clean as the rect trackpad.
+    geo = build_trackpad(TrackpadParams(name="CT_Trackpad", num_rows=4, num_cols=4, **kw))
+    board = tmp_path / "board.kicad_pcb"
+    board.write_text(widget_board_text(geo, nets=trackpad_net_map(geo)))
+    report = _drc(board, tmp_path / "drc.json")
+    assert report["violations"] == [], report["violations"]
+    assert report["unconnected_items"] == [], report["unconnected_items"]
+
+
 def test_trackpad_drc_catches_undersized_gap(tmp_path):
     # Negative control: shrinking the gap (and neck) below the fab clearance MUST
     # be flagged — proving Rx and Tx sit on distinct nets and the gate is real.

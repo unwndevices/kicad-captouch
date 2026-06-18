@@ -142,3 +142,35 @@ def test_golden_footprint():
 def test_golden_symbol():
     text = symbol.trackpad_symbol_lib_text(build_trackpad(GOLDEN_PARAMS))
     assert text == (GOLDEN / "CT_Trackpad_3x3.kicad_sym").read_text()
+
+
+# Outline-only goldens: same 3x3 matrix/copper as the rect baseline, differing
+# only in the F.Fab mask outline (Stage A — copper is not yet clipped).
+GOLDEN_RRECT_PARAMS = TrackpadParams(name="CT_Trackpad_3x3_RRect", num_rows=3,
+                                     num_cols=3, mask_shape="rrect", corner_radius=2.0)
+GOLDEN_CIRCLE_PARAMS = TrackpadParams(name="CT_Trackpad_3x3_Circle", num_rows=3,
+                                      num_cols=3, mask_shape="circle")
+
+
+def test_golden_rrect_footprint():
+    text = footprint.trackpad_footprint_text(build_trackpad(GOLDEN_RRECT_PARAMS))
+    assert text == (GOLDEN / "CT_Trackpad_3x3_RRect.kicad_mod").read_text()
+
+
+def test_golden_circle_footprint():
+    text = footprint.trackpad_footprint_text(build_trackpad(GOLDEN_CIRCLE_PARAMS))
+    assert text == (GOLDEN / "CT_Trackpad_3x3_Circle.kicad_mod").read_text()
+
+
+@pytest.mark.parametrize("kw", [
+    {"mask_shape": "rrect", "corner_radius": 2.0}, {"mask_shape": "circle"},
+])
+def test_mask_does_not_change_symbol(kw):
+    # The mask shapes only documentation/copper outline, never pin topology, so a
+    # given matrix emits the same symbol regardless of mask_shape (no sym golden
+    # needed per shape).
+    rect = symbol.trackpad_symbol_lib_text(build_trackpad(
+        TrackpadParams(name="T", num_rows=3, num_cols=3)))
+    masked = symbol.trackpad_symbol_lib_text(build_trackpad(
+        TrackpadParams(name="T", num_rows=3, num_cols=3, **kw)))
+    assert masked == rect

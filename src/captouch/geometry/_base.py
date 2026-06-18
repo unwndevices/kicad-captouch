@@ -11,6 +11,7 @@ shape-specific layout.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from shapely.geometry import Polygon
@@ -20,9 +21,11 @@ __all__ = [
     "Electrode",
     "GeometryError",
     "ANCHOR_RADIUS",
+    "RRECT_ARC_SEGS",
     "round_corners",
     "anchor_point",
     "polygon_points",
+    "rounded_rect_points",
     "tip_relief_radius",
 ]
 
@@ -47,6 +50,11 @@ ROUND = 4
 # Anchor circle radius (mm) for the custom pads (see exporter). The interior
 # point each electrode exposes must comfortably contain this.
 ANCHOR_RADIUS = 0.25
+
+# Segments per 90° quarter-arc when polyline-approximating a rounded-rectangle
+# *outline* (F.Fab / silk / courtyard). These are documentation lines, not
+# copper, so they can be smoother than the lean ARC_QUAD_SEGS used for pad fillets.
+RRECT_ARC_SEGS = 12
 
 
 class GeometryError(ValueError):
@@ -82,6 +90,42 @@ def polygon_points(poly: Polygon) -> list[Point]:
     if coords and coords[0] == coords[-1]:
         coords = coords[:-1]
     return [(round(x, ROUND), round(y, ROUND)) for x, y in coords]
+
+
+def rounded_rect_points(
+    x1: float, y1: float, x2: float, y2: float, r: float,
+    segs: int = RRECT_ARC_SEGS,
+) -> list[Point]:
+    """Vertices of a rounded rectangle ``[x1,x2]×[y1,y2]`` with corner radius *r*.
+
+    Returns a closed ring of ``(x, y)`` points (no duplicate closing vertex),
+    clockwise in KiCad coordinates (y down). Each 90° corner is approximated by
+    *segs* line segments; the four straight edges are the implicit polygon edges
+    between consecutive corner arcs. *r* is clamped to half the shorter side.
+
+    Shared by the footprint exporter and the GUI preview so the emitted outline
+    and the previewed outline match vertex-for-vertex.
+    """
+    r = min(r, (x2 - x1) / 2.0, (y2 - y1) / 2.0)
+    if r <= 0:
+        return [(x1, y1), (x2, y1), (x2, y2), (x1, y2)]
+    quarter = math.pi / 2.0
+    # (center_x, center_y, start_angle) per corner, each swept +90° clockwise.
+    # With y increasing downward, increasing the math-convention angle traces a
+    # visually clockwise path: −90°→top, 0°→right, +90°→bottom, 180°→left.
+    corners = [
+        (x2 - r, y1 + r, -quarter),  # top-right
+        (x2 - r, y2 - r, 0.0),       # bottom-right
+        (x1 + r, y2 - r, quarter),   # bottom-left
+        (x1 + r, y1 + r, math.pi),   # top-left
+    ]
+    pts: list[Point] = []
+    for cx, cy, a0 in corners:
+        for i in range(segs + 1):
+            a = a0 + quarter * i / segs
+            pts.append((round(cx + r * math.cos(a), ROUND),
+                        round(cy + r * math.sin(a), ROUND)))
+    return pts
 
 
 def anchor_point(poly: Polygon) -> Point:

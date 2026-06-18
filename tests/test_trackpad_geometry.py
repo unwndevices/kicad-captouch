@@ -5,10 +5,11 @@ from __future__ import annotations
 import math
 
 import pytest
-from shapely.geometry import Point
+from shapely.geometry import Point, Polygon
 from shapely.ops import unary_union
 
 from captouch.geometry import build_trackpad
+from captouch.geometry._base import rounded_rect_points
 from captouch.params import TrackpadParams
 
 SIZES = [(3, 3), (3, 5), (4, 5), (5, 5)]
@@ -108,3 +109,48 @@ def test_symbol_columns_split_rx_left_tx_right():
     left, right = geo.symbol_columns()
     assert [name for _, name in left] == [f"Rx{i + 1}" for i in range(4)]
     assert [name for _, name in right] == [f"Tx{i + 1}" for i in range(5)]
+
+
+# -- mask outline (Stage A: documentation only; copper still rect) ---------- #
+def test_fab_outline_follows_mask_shape():
+    assert build_trackpad(TrackpadParams()).fab_primitives[0][0] == "rect"
+
+    rr = build_trackpad(TrackpadParams(mask_shape="rrect", corner_radius=2.0))
+    kind, *_rest, r = rr.fab_primitives[0]
+    assert kind == "rrect" and r == pytest.approx(2.0)
+
+    circ = build_trackpad(TrackpadParams(num_rows=4, num_cols=4, mask_shape="circle"))
+    kind, cx, cy, r = circ.fab_primitives[0]
+    assert kind == "circle" and (cx, cy) == (0.0, 0.0)
+    assert r == pytest.approx(10.0)  # 4x4 @ 5 mm → 20 mm → inscribed radius 10
+
+
+@pytest.mark.parametrize("shape,kw", [
+    ("rect", {}), ("rrect", {"corner_radius": 2.0}), ("circle", {}),
+])
+def test_courtyard_stays_rect_until_copper_is_clipped(shape, kw):
+    geo = build_trackpad(TrackpadParams(num_rows=4, num_cols=4, mask_shape=shape, **kw))
+    assert geo.courtyard_outline[0] == "rect"
+
+
+def test_rect_copper_unchanged_by_non_rect_mask():
+    # Stage A: the mask only changes documentation, never the copper polygons.
+    base = build_trackpad(TrackpadParams(num_rows=4, num_cols=4))
+    rr = build_trackpad(TrackpadParams(num_rows=4, num_cols=4,
+                                       mask_shape="rrect", corner_radius=2.0))
+    for a, b in zip(base.nets, rr.nets):
+        assert [p.area for p in a.fcu] == pytest.approx([p.area for p in b.fcu])
+
+
+def test_rounded_rect_points_form_valid_polygon():
+    pts = rounded_rect_points(-5.0, -4.0, 5.0, 4.0, 1.5)
+    poly = Polygon(pts)
+    assert poly.is_valid
+    assert poly.bounds == pytest.approx((-5.0, -4.0, 5.0, 4.0), abs=1e-6)
+    assert (-5.0, -4.0) not in pts  # the sharp corner is replaced by an arc
+
+
+def test_rounded_rect_points_degenerate_radius_is_a_rectangle():
+    assert rounded_rect_points(-5.0, -4.0, 5.0, 4.0, 0.0) == [
+        (-5.0, -4.0), (5.0, -4.0), (5.0, 4.0), (-5.0, 4.0)
+    ]

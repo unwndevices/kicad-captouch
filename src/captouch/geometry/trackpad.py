@@ -79,14 +79,29 @@ class TrackpadGeometry:
     # -- documentation outline (shared exporter / preview) ----------------- #
     @property
     def fab_primitives(self) -> list[tuple]:
-        """F.Fab documentation shape: the panel rectangle."""
-        minx, miny, maxx, maxy = self.bounds
-        return [("rect", minx, miny, maxx, maxy)]
+        """F.Fab documentation shape, following the configured ``mask_shape``."""
+        return [self._mask_outline()]
 
     @property
     def courtyard_outline(self) -> tuple:
-        """Bounding shape the exporter expands by the courtyard margin."""
+        """Bounding shape the exporter expands by the courtyard margin.
+
+        Always the copper bounding rectangle: until the copper itself is clipped
+        to the mask, an inscribed rounded/round courtyard would under-bound the
+        rectangular copper's corners.
+        """
         minx, miny, maxx, maxy = self.bounds
+        return ("rect", minx, miny, maxx, maxy)
+
+    def _mask_outline(self) -> tuple:
+        """The mask outline primitive (``rect`` / ``rrect`` / ``circle``)."""
+        minx, miny, maxx, maxy = self.bounds
+        shape = self.params.mask_shape
+        if shape == "circle":
+            return ("circle", 0.0, 0.0, round(self.params.effective_radius, ROUND))
+        if shape == "rrect":
+            return ("rrect", minx, miny, maxx, maxy,
+                    round(self.params.corner_radius, ROUND))
         return ("rect", minx, miny, maxx, maxy)
 
     def symbol_columns(self) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:

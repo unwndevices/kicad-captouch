@@ -14,7 +14,13 @@ from __future__ import annotations
 import pytest
 
 from captouch.export import footprint, symbol
-from captouch.geometry import TrackpadGeometry, WheelGeometry, build_slider, build_trackpad
+from captouch.geometry import (
+    TrackpadGeometry,
+    WheelGeometry,
+    build_slider,
+    build_trackpad,
+    build_wheel,
+)
 from captouch.geometry._base import polygon_points
 from captouch.params import (
     SLIDER_PRESETS,
@@ -82,6 +88,25 @@ def test_panel_cannot_emit_subminimum_segments(qapp):
     panel = ParamPanel()
     panel.num_segments.setValue(1)
     assert panel.params().num_segments == 3
+
+
+def test_slider_panel_length_driven_derives_count(qapp):
+    from captouch.gui.panel import ParamPanel
+
+    panel = ParamPanel()
+    assert not panel.length_driven.isChecked()
+    assert panel.num_segments.isEnabled() and not panel.target_length.isEnabled()
+
+    panel.length_driven.setChecked(True)
+    panel.target_length.setValue(80.0)
+    p = panel.params()
+    assert p.num_segments == 9  # derived for the 80 mm target at the default pitch
+    assert abs(p.total_length - 80.0) <= p.pitch / 2 + 1e-9
+    assert not panel.num_segments.isEnabled()  # read-only in size mode
+    build_slider(p)
+    # Loading a preset switches back to count-driven.
+    panel.set_params(SLIDER_PRESETS["infineon"])
+    assert not panel.length_driven.isChecked()
 
 
 # --------------------------------------------------------------------------- #
@@ -220,6 +245,24 @@ def test_wheel_export_matches_preview(qapp, tmp_path):
     assert fp_path.read_text() == footprint.widget_footprint_text(geo)
     assert sym_path.read_text() == symbol.widget_symbol_lib_text(geo)
     assert fp_path.read_text().count("(pad ") == len(geo.electrodes)
+
+
+def test_wheel_panel_diameter_driven_derives_count(qapp):
+    from captouch.gui.wheel_panel import WheelPanel
+
+    panel = WheelPanel()
+    assert not panel.diameter_driven.isChecked()
+    assert panel.num_segments.isEnabled() and not panel.target_diameter.isEnabled()
+
+    panel.diameter_driven.setChecked(True)
+    panel.target_diameter.setValue(50.0)
+    p = panel.params()
+    assert abs(p.outer_diameter - 50.0) <= p.pitch + 1e-9
+    assert not panel.num_segments.isEnabled()  # read-only in size mode
+    build_wheel(p)
+    # Loading a preset switches back to count-driven.
+    panel.set_params(WHEEL_PRESETS["microchip"])
+    assert not panel.diameter_driven.isChecked()
 
 
 # --------------------------------------------------------------------------- #

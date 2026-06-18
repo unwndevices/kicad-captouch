@@ -20,12 +20,13 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFormLayout,
     QGroupBox,
+    QLabel,
     QLineEdit,
     QVBoxLayout,
 )
 
 from ..geometry import build_slider
-from ..params import SLIDER_PRESETS, SliderParams
+from ..params import SLIDER_PRESETS, SliderError, SliderParams
 from ..params.slider import SEGMENT_SHAPES
 from ._panel_base import PRESET_PLACEHOLDER as _PRESET_PLACEHOLDER
 from ._panel_base import PanelBase
@@ -66,10 +67,18 @@ class ParamPanel(PanelBase):
         self.shape = QComboBox()
         self.shape.addItems(SEGMENT_SHAPES)
         self.num_segments = self._spin(3, 64, 1)
+        # Design-from-size: enter an overall length and the segment count is derived.
+        self.length_driven = QCheckBox("Design from overall length")
+        self.target_length = self._dspin(2.0, 1000.0, 1.0)
+        self.target_length.setValue(60.0)
+        self.derived_segments = QLabel("—")
         shape_box = QGroupBox("Shape && count")
         sf = QFormLayout(shape_box)
         sf.addRow("Name", self.name)
         sf.addRow("Segment shape", self.shape)
+        sf.addRow(self.length_driven)
+        sf.addRow("Target length (mm)", self.target_length)
+        sf.addRow("Derived segments", self.derived_segments)
         sf.addRow("Active segments", self.num_segments)
         root.addWidget(shape_box)
 
@@ -117,9 +126,30 @@ class ParamPanel(PanelBase):
         self.name.textEdited.connect(self._emit)
         self.shape.currentIndexChanged.connect(self._on_shape)
 
+        # The derived segment count depends on the target length and the pitch /
+        # end-dummy inputs (wired here, after every spin exists).
+        self.length_driven.toggled.connect(self._on_length_mode)
+        self.length_driven.toggled.connect(self._emit)
+        for spin in (
+            self.target_length,
+            self.air_gap,
+            self.finger_diameter,
+            self.segment_width,
+            self.end_dummies,
+        ):
+            spin.valueChanged.connect(self._update_derived)
+        self.segment_width_auto.toggled.connect(self._update_derived)
+        self._on_length_mode()  # initial gating: count-driven by default
+
         self._set_tooltips(
             {
                 self.name: "Base name for the generated .kicad_mod / .kicad_sym files.",
+                self.length_driven: (
+                    "Design from a target overall length: the segment count is derived "
+                    "from the pitch (W + A); the achieved length lands within ~half a "
+                    "pitch of the target."
+                ),
+                self.target_length: "Overall slider length (mm) to size the segment count to.",
                 self.shape: (
                     "Electrode edge style. Chevron / interdigitated stretch the crossover "
                     "so a finger always overlaps ≥2 segments (linear interpolation)."
@@ -142,6 +172,32 @@ class ParamPanel(PanelBase):
         )
 
     # -- signals ------------------------------------------------------------ #
+    def _on_length_mode(self, *args) -> None:
+        """Toggle between count-driven and length-driven segment entry."""
+        size = self.length_driven.isChecked()
+        self.target_length.setEnabled(size)
+        self.derived_segments.setEnabled(size)
+        self.num_segments.setEnabled(not size)  # derived → read-only in size mode
+        self._update_derived()
+        self._emit()
+
+    def _update_derived(self, *args) -> None:
+        """Show the segment count a length-driven slider derives from its target."""
+        if not self.length_driven.isChecked():
+            self.derived_segments.setText("—")
+            return
+        try:
+            p = self._raw_params().fit_to_length(self.target_length.value())
+        except SliderError:
+            self.derived_segments.setText("(invalid pitch)")
+            return
+        self.derived_segments.setText(
+            f"{p.num_segments} segments  (achieved {p.total_length:.1f} mm)"
+        )
+        self.num_segments.blockSignals(True)  # mirror, don't re-trigger a rebuild
+        self.num_segments.setValue(p.num_segments)
+        self.num_segments.blockSignals(False)
+
     def _on_preset(self, index: int) -> None:
         if index <= 0:
             return
@@ -151,8 +207,8 @@ class ParamPanel(PanelBase):
         self.changed.emit()
 
     # -- params <-> form ---------------------------------------------------- #
-    def params(self) -> SliderParams:
-        """Read the form into a (possibly invalid, unvalidated) SliderParams."""
+    def _raw_params(self) -> SliderParams:
+        """The form's params using the explicit segment count (no length sizing)."""
         return SliderParams(
             num_segments=self.num_segments.value(),
             segment_shape=self.shape.currentText(),
@@ -172,10 +228,20 @@ class ParamPanel(PanelBase):
             **self._support_kwargs(),
         )
 
+    def params(self) -> SliderParams:
+        """Read the form into a (possibly invalid, unvalidated) SliderParams."""
+        p = self._raw_params()
+        if self.length_driven.isChecked():
+            p = p.fit_to_length(self.target_length.value())
+        return p
+
     def set_params(self, p: SliderParams) -> None:
         """Load *p* into the form without emitting :attr:`changed`."""
         self._loading = True
         try:
+            # A loaded params set carries an explicit count, so show count-driven
+            # mode (the slider has no persistent length target to restore).
+            self.length_driven.setChecked(False)
             self.name.setText(p.name)
             self.shape.setCurrentText(p.segment_shape)
             self.num_segments.setValue(p.num_segments)
@@ -196,5 +262,6 @@ class ParamPanel(PanelBase):
 
             self._load_support(p)
             self._on_shape()  # sync enable-state to the loaded shape
+            self._on_length_mode()  # count-driven gating after load
         finally:
             self._loading = False

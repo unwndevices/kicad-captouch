@@ -14,12 +14,13 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFormLayout,
     QGroupBox,
+    QLabel,
     QLineEdit,
     QVBoxLayout,
 )
 
 from ..geometry import build_wheel
-from ..params import WHEEL_PRESETS, WheelParams
+from ..params import WHEEL_PRESETS, WheelError, WheelParams
 from ..params.slider import SEGMENT_SHAPES
 from ._panel_base import PRESET_PLACEHOLDER as _PRESET_PLACEHOLDER
 from ._panel_base import PanelBase
@@ -59,10 +60,18 @@ class WheelPanel(PanelBase):
         self.shape = QComboBox()
         self.shape.addItems(SEGMENT_SHAPES)
         self.num_segments = self._spin(3, 32, 1)
+        # Design-from-size: enter an overall outer diameter; the count is derived.
+        self.diameter_driven = QCheckBox("Design from outer diameter")
+        self.target_diameter = self._dspin(5.0, 500.0, 1.0)
+        self.target_diameter.setValue(40.0)
+        self.derived_segments = QLabel("—")
         shape_box = QGroupBox("Shape && count")
         sf = QFormLayout(shape_box)
         sf.addRow("Name", self.name)
         sf.addRow("Boundary shape", self.shape)
+        sf.addRow(self.diameter_driven)
+        sf.addRow("Target outer Ø (mm)", self.target_diameter)
+        sf.addRow("Derived segments", self.derived_segments)
         sf.addRow("Segments", self.num_segments)
         root.addWidget(shape_box)
 
@@ -110,9 +119,30 @@ class WheelPanel(PanelBase):
         self.name.textEdited.connect(self._emit)
         self.shape.currentIndexChanged.connect(self._on_shape)
 
+        # The derived count depends on the target diameter, the ring width and the
+        # pitch inputs (wired here, after every spin exists).
+        self.diameter_driven.toggled.connect(self._on_diameter_mode)
+        self.diameter_driven.toggled.connect(self._emit)
+        for spin in (
+            self.target_diameter,
+            self.air_gap,
+            self.finger_diameter,
+            self.segment_width,
+            self.ring_width,
+        ):
+            spin.valueChanged.connect(self._update_derived)
+        self.segment_width_auto.toggled.connect(self._update_derived)
+        self._on_diameter_mode()  # initial gating: count-driven by default
+
         self._set_tooltips(
             {
                 self.name: "Base name for the generated .kicad_mod / .kicad_sym files.",
+                self.diameter_driven: (
+                    "Design from a target outer diameter: the segment count is derived "
+                    "from the pitch (W + A) and ring width; the achieved diameter lands "
+                    "within ~one pitch of the target."
+                ),
+                self.target_diameter: "Overall outer diameter (mm) to size the segment count to.",
                 self.shape: "Electrode boundary style around the ring.",
                 self.num_segments: "Electrode count around the ring (≥3). The wheel is continuous.",
                 self.segment_width: (
@@ -131,6 +161,32 @@ class WheelPanel(PanelBase):
         )
 
     # -- signals ------------------------------------------------------------ #
+    def _on_diameter_mode(self, *args) -> None:
+        """Toggle between count-driven and diameter-driven segment entry."""
+        size = self.diameter_driven.isChecked()
+        self.target_diameter.setEnabled(size)
+        self.derived_segments.setEnabled(size)
+        self.num_segments.setEnabled(not size)  # derived → read-only in size mode
+        self._update_derived()
+        self._emit()
+
+    def _update_derived(self, *args) -> None:
+        """Show the segment count a diameter-driven wheel derives from its target."""
+        if not self.diameter_driven.isChecked():
+            self.derived_segments.setText("—")
+            return
+        try:
+            p = self._raw_params().fit_to_diameter(self.target_diameter.value())
+        except WheelError:
+            self.derived_segments.setText("(invalid pitch)")
+            return
+        self.derived_segments.setText(
+            f"{p.num_segments} segments  (achieved Ø {p.outer_diameter:.1f} mm)"
+        )
+        self.num_segments.blockSignals(True)  # mirror, don't re-trigger a rebuild
+        self.num_segments.setValue(p.num_segments)
+        self.num_segments.blockSignals(False)
+
     def _on_preset(self, index: int) -> None:
         if index <= 0:
             return
@@ -140,8 +196,8 @@ class WheelPanel(PanelBase):
         self.changed.emit()
 
     # -- params <-> form ---------------------------------------------------- #
-    def params(self) -> WheelParams:
-        """Read the form into a (possibly invalid, unvalidated) WheelParams."""
+    def _raw_params(self) -> WheelParams:
+        """The form's params using the explicit segment count (no diameter sizing)."""
         return WheelParams(
             num_segments=self.num_segments.value(),
             segment_shape=self.shape.currentText(),
@@ -161,10 +217,20 @@ class WheelPanel(PanelBase):
             **self._support_kwargs(),
         )
 
+    def params(self) -> WheelParams:
+        """Read the form into a (possibly invalid, unvalidated) WheelParams."""
+        p = self._raw_params()
+        if self.diameter_driven.isChecked():
+            p = p.fit_to_diameter(self.target_diameter.value())
+        return p
+
     def set_params(self, p: WheelParams) -> None:
         """Load *p* into the form without emitting :attr:`changed`."""
         self._loading = True
         try:
+            # A loaded params set carries an explicit count, so show count-driven
+            # mode (the wheel has no persistent diameter target to restore).
+            self.diameter_driven.setChecked(False)
             self.name.setText(p.name)
             self.shape.setCurrentText(p.segment_shape)
             self.num_segments.setValue(p.num_segments)
@@ -184,5 +250,6 @@ class WheelPanel(PanelBase):
 
             self._load_support(p)
             self._on_shape()
+            self._on_diameter_mode()  # count-driven gating after load
         finally:
             self._loading = False

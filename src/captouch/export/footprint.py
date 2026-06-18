@@ -19,6 +19,7 @@ from .. import __version__, sexpr
 from ..geometry import SliderGeometry, TrackpadGeometry, WheelGeometry
 from ..geometry._base import (
     ANCHOR_RADIUS,
+    COURTYARD_MARGIN,
     anchor_point,
     polygon_points,
     rounded_rect_points,
@@ -37,7 +38,6 @@ ElectrodeGeometry = Union[SliderGeometry, WheelGeometry]
 FOOTPRINT_VERSION = 20241229
 GENERATOR = "kicad-captouch"
 
-COURTYARD_MARGIN = 0.25  # mm around the copper bounding box
 COURTYARD_WIDTH = 0.05
 FAB_WIDTH = 0.1
 SILK_WIDTH = 0.12

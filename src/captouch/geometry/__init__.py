@@ -14,6 +14,7 @@ from ._base import Electrode
 from .slider import SliderGeometry, build_slider
 from .trackpad import TrackpadGeometry, TrackpadNet, Via, build_trackpad
 from .wheel import WheelGeometry, build_wheel
+from .zones import SupportCopper, build_support, net_tie_number
 
 __all__ = [
     "build_slider",
@@ -25,4 +26,7 @@ __all__ = [
     "TrackpadNet",
     "Via",
     "Electrode",
+    "SupportCopper",
+    "build_support",
+    "net_tie_number",
 ]

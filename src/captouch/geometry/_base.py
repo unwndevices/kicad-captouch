@@ -21,6 +21,7 @@ __all__ = [
     "Electrode",
     "GeometryError",
     "ANCHOR_RADIUS",
+    "COURTYARD_MARGIN",
     "RRECT_ARC_SEGS",
     "round_corners",
     "anchor_point",
@@ -50,6 +51,11 @@ ROUND = 4
 # Anchor circle radius (mm) for the custom pads (see exporter). The interior
 # point each electrode exposes must comfortably contain this.
 ANCHOR_RADIUS = 0.25
+
+# Courtyard inflation (mm) around the copper/outline bounding shape. Lives here
+# (not in the exporter) so the geometry layer — including the support-copper zone
+# builder — can size a matching courtyard. Re-exported by the footprint exporter.
+COURTYARD_MARGIN = 0.25
 
 # Segments per 90° quarter-arc when polyline-approximating a rounded-rectangle
 # *outline* (F.Fab / silk / courtyard). These are documentation lines, not

@@ -42,6 +42,8 @@ __all__ = [
     "validate_trackpad",
     "TRACKPAD_PRESETS",
     "MASK_SHAPES",
+    "CLIP_MODES",
+    "DISABLE_AREA_FRACTION",
 ]
 
 #: Min annular ring (mm) required between a via's drill and its outer diameter
@@ -57,6 +59,27 @@ MAX_NODES = 100
 
 #: Valid outer-mask outlines the diamond matrix can be shaped to.
 MASK_SHAPES = ("rect", "rrect", "circle")
+
+#: How a curved (circle / rrect) mask treats the diamonds it crosses:
+#:
+#: * ``"inscribe"`` — keep a diamond only when its **centre** is inside the mask,
+#:   then clip; rim diamonds are kept whole or dropped whole, so the copper
+#:   approximates the curve as a chunky inscribed lattice and every surviving
+#:   channel stays ~half-present (no runt partials, nothing to disable).
+#: * ``"conform"`` — clip **every** diamond/neck/strap to the mask boundary so the
+#:   copper edge follows the curve exactly (Azoteq AZD068 §6, Fig 6.3). Rim
+#:   diamonds become cut *partial channels*; the build keeps them all and reports
+#:   which fall below :data:`DISABLE_AREA_FRACTION` of their full F.Cu area so they
+#:   can be disabled in firmware.
+#:
+#: For ``mask_shape == "rect"`` the two are identical (the box clips nothing the
+#: lattice doesn't already terminate on), so ``clip_mode`` is a no-op there.
+CLIP_MODES = ("inscribe", "conform")
+
+#: A ``conform`` channel keeping less than this fraction of its full (rect-mask)
+#: F.Cu electrode area is flagged for firmware disabling — Azoteq AZD068 §6's
+#: ">50 % area removed → disable" rule of thumb.
+DISABLE_AREA_FRACTION = 0.5
 
 
 class TrackpadError(SliderError):
@@ -107,6 +130,12 @@ class TrackpadParams:
         unchanged by the mask — only *which* copper survives. A circle is only
         sensible when ``width ≈ height`` (a square-ish matrix); an elongated matrix
         crops to its shorter dimension.
+    clip_mode:
+        How a curved mask treats the diamonds it crosses: ``"inscribe"`` (default,
+        rim diamonds kept whole or dropped whole — a chunky inscribed lattice with
+        no partial channels) or ``"conform"`` (rim diamonds cut to the curve, so the
+        copper edge follows it exactly — Azoteq Fig 6.3 — at the cost of partial
+        channels). See :data:`CLIP_MODES`. No effect when ``mask_shape == "rect"``.
     corner_radius:
         Rounded-rectangle fillet radius (mm); used only when ``mask_shape ==
         "rrect"``. Must be ``0 < corner_radius <= min(width, height) / 2``.
@@ -132,6 +161,7 @@ class TrackpadParams:
     via_drill: float = 0.3
     via_diameter: float = 0.6
     mask_shape: str = "rect"
+    clip_mode: str = "inscribe"
     corner_radius: float = 0.0
     radius: float | None = None
     min_feature: float = 0.1
@@ -258,6 +288,10 @@ def _validate_mask(p: TrackpadParams) -> None:
     if p.mask_shape not in MASK_SHAPES:
         raise TrackpadError(
             f"mask_shape must be one of {MASK_SHAPES}, got {p.mask_shape!r}"
+        )
+    if p.clip_mode not in CLIP_MODES:
+        raise TrackpadError(
+            f"clip_mode must be one of {CLIP_MODES}, got {p.clip_mode!r}"
         )
     if p.min_feature < 0:
         raise TrackpadError(f"min_feature must be >= 0, got {p.min_feature}")

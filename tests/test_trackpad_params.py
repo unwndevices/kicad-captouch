@@ -106,6 +106,20 @@ def test_reject_unknown_mask_shape():
         validate_trackpad(TrackpadParams(mask_shape="hexagon"))
 
 
+def test_default_clip_mode_is_inscribe():
+    assert TrackpadParams().clip_mode == "inscribe"
+
+
+def test_reject_unknown_clip_mode():
+    with pytest.raises(TrackpadError, match="clip_mode"):
+        validate_trackpad(TrackpadParams(mask_shape="circle", clip_mode="squash"))
+
+
+def test_conform_clip_mode_validates():
+    validate_trackpad(TrackpadParams(num_rows=4, num_cols=4,
+                                     mask_shape="circle", clip_mode="conform"))
+
+
 def test_reject_negative_min_feature():
     with pytest.raises(TrackpadError, match="min_feature"):
         validate_trackpad(TrackpadParams(min_feature=-0.1))

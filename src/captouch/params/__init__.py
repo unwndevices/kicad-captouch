@@ -24,6 +24,8 @@ from .slider import (
     validate_slider,
 )
 from .trackpad import (
+    CLIP_MODES,
+    DISABLE_AREA_FRACTION,
     MASK_SHAPES,
     TRACKPAD_PRESETS,
     TrackpadError,
@@ -51,6 +53,8 @@ __all__ = [
     "validate_trackpad",
     "TRACKPAD_PRESETS",
     "MASK_SHAPES",
+    "CLIP_MODES",
+    "DISABLE_AREA_FRACTION",
     "FabRules",
     "FabViolation",
     "FAB_PROFILES",

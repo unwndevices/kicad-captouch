@@ -14,8 +14,15 @@ from __future__ import annotations
 import pytest
 
 from captouch.export import footprint, symbol
-from captouch.geometry import WheelGeometry, build_slider
-from captouch.params import SLIDER_PRESETS, WHEEL_PRESETS, SliderParams
+from captouch.geometry import TrackpadGeometry, WheelGeometry, build_slider, build_trackpad
+from captouch.geometry._base import polygon_points
+from captouch.params import (
+    SLIDER_PRESETS,
+    TRACKPAD_PRESETS,
+    WHEEL_PRESETS,
+    SliderParams,
+    TrackpadParams,
+)
 
 pytestmark = pytest.mark.usefixtures("qapp")
 
@@ -213,3 +220,69 @@ def test_wheel_export_matches_preview(qapp, tmp_path):
     assert fp_path.read_text() == footprint.widget_footprint_text(geo)
     assert sym_path.read_text() == symbol.widget_symbol_lib_text(geo)
     assert fp_path.read_text().count("(pad ") == len(geo.electrodes)
+
+
+# --------------------------------------------------------------------------- #
+# widget switcher — trackpad
+# --------------------------------------------------------------------------- #
+def test_trackpad_panel_defaults_build_valid_geometry(qapp):
+    from captouch.gui.trackpad_panel import TrackpadPanel
+
+    panel = TrackpadPanel()
+    geo = build_trackpad(panel.params())  # must not raise
+    assert len(geo.nets) == TrackpadParams().num_pins
+
+
+@pytest.mark.parametrize("key", sorted(TRACKPAD_PRESETS))
+def test_trackpad_preset_roundtrips_through_panel(qapp, key):
+    from captouch.gui.trackpad_panel import TrackpadPanel
+
+    preset = TRACKPAD_PRESETS[key]
+    panel = TrackpadPanel()
+    panel.set_params(preset)
+    got = panel.params()
+    assert (got.num_rows, got.num_cols) == (preset.num_rows, preset.num_cols)
+    assert got.diamond_pitch == pytest.approx(preset.diamond_pitch)
+    assert got.diamond_gap == pytest.approx(preset.diamond_gap)
+    build_trackpad(got)  # the loaded params still build
+
+
+def test_switch_to_trackpad_builds_trackpad_geometry(qapp):
+    from captouch.gui.app import MainWindow
+    from captouch.gui.trackpad_panel import TrackpadPanel
+
+    win = MainWindow()
+    win._on_widget_changed(2)  # 0 = Slider, 1 = Wheel, 2 = Trackpad
+    assert isinstance(win.panel, TrackpadPanel)
+    assert isinstance(win.preview.geometry_model, TrackpadGeometry)
+
+
+def test_trackpad_preview_matches_geometry(qapp):
+    from captouch.gui.app import MainWindow
+
+    win = MainWindow()
+    win._on_widget_changed(2)
+    win.panel.set_params(TRACKPAD_PRESETS["compact"])
+    win._rebuild()
+    geo = win.preview.geometry_model
+    # Drawn pieces (B.Cu straps first, then F.Cu copper) match the geometry's
+    # exact emitted points — the WYSIWYG guarantee, now across two layers.
+    for net in geo.nets:
+        expected = [polygon_points(p) for p in net.bcu] + [polygon_points(p) for p in net.fcu]
+        assert win.preview.net_polygon_points(net.pad_number) == expected
+
+
+def test_trackpad_export_matches_preview(qapp, tmp_path):
+    from captouch.gui.app import MainWindow
+
+    win = MainWindow()
+    win._on_widget_changed(2)
+    win.panel.set_params(TRACKPAD_PRESETS["infineon"])
+    win._rebuild()
+    geo = win.preview.geometry_model
+
+    fp_path, sym_path = win.export_to(tmp_path)
+    assert fp_path.read_text() == footprint.trackpad_footprint_text(geo)
+    assert sym_path.read_text() == symbol.trackpad_symbol_lib_text(geo)
+    # One distinct pad number per Rx/Tx line, but many pads (multi-layer nets).
+    assert fp_path.read_text().count("(pad ") > len(geo.nets)

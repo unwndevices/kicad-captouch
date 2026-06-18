@@ -22,18 +22,22 @@ from PySide6.QtWidgets import QGraphicsScene, QGraphicsView
 from typing import Union
 
 from ..export.footprint import COURTYARD_MARGIN
-from ..geometry import Electrode, SliderGeometry, WheelGeometry
+from ..geometry import Electrode, SliderGeometry, TrackpadGeometry, WheelGeometry
+from ..geometry._base import polygon_points
 
-WidgetGeometry = Union[SliderGeometry, WheelGeometry]
+WidgetGeometry = Union[SliderGeometry, WheelGeometry, TrackpadGeometry]
 
 __all__ = ["PreviewView", "LAYERS"]
 
-#: Toggleable preview layers, in stacking order, with human labels.
+#: Toggleable preview layers, in stacking order, with human labels. ``back_copper``
+#: and ``vias`` are only populated by the (two-layer) trackpad.
 LAYERS: tuple[tuple[str, str], ...] = (
     ("fab", "Fab outline"),
     ("courtyard", "Courtyard"),
-    ("copper", "Active copper"),
+    ("back_copper", "B.Cu bridges"),
+    ("copper", "F.Cu copper"),
     ("dummies", "Dummy (GND)"),
+    ("vias", "Vias"),
     ("anchors", "Pad anchors"),
     ("labels", "Pad numbers"),
 )
@@ -45,6 +49,10 @@ _COPPER_FILL = QColor("#c5821f")
 _COPPER_EDGE = QColor("#e6a23c")
 _DUMMY_FILL = QColor("#4a565f")
 _DUMMY_EDGE = QColor("#6c7a85")
+_BCU_FILL = QColor(64, 150, 160, 150)  # teal, semi-transparent (it's on the back)
+_BCU_EDGE = QColor("#54b0bd")
+_VIA_FILL = QColor("#c9d1d9")
+_VIA_EDGE = QColor("#10141a")
 _COURTYARD = QColor("#c46fb3")
 _FAB = QColor("#9c7a4d")
 _ANCHOR = QColor("#10141a")
@@ -57,6 +65,11 @@ _FIT_MARGIN = 0.15  # fraction of the content size left as padding when fitting
 def electrode_polygon(e: Electrode) -> QPolygonF:
     """The electrode's exterior ring as a closed :class:`QPolygonF`."""
     return QPolygonF([QPointF(x, y) for (x, y) in e.points])
+
+
+def _qpoly(points) -> QPolygonF:
+    """A list of ``(x, y)`` vertices as a :class:`QPolygonF`."""
+    return QPolygonF([QPointF(x, y) for (x, y) in points])
 
 
 class PreviewView(QGraphicsView):
@@ -79,6 +92,7 @@ class PreviewView(QGraphicsView):
         self._geometry: WidgetGeometry | None = None
         self._layer_items: dict[str, list] = {name: [] for name, _ in LAYERS}
         self._electrode_items: dict[str, object] = {}  # pad_number -> polygon item
+        self._net_items: dict[str, list] = {}  # trackpad: pad_number -> [polygon items]
         self._layer_visible: dict[str, bool] = {name: True for name, _ in LAYERS}
         self._layer_visible["anchors"] = False  # off by default (visual noise)
 
@@ -113,6 +127,13 @@ class PreviewView(QGraphicsView):
         poly = item.polygon()
         return [(round(p.x(), 4), round(p.y(), 4)) for p in poly]
 
+    def net_polygon_points(self, pad_number: str) -> list[list[tuple[float, float]]]:
+        """Vertices drawn for every copper piece of a trackpad net (WYSIWYG check)."""
+        out = []
+        for item in self._net_items[pad_number]:
+            out.append([(round(p.x(), 4), round(p.y(), 4)) for p in item.polygon()])
+        return out
+
     def fit(self) -> None:
         """Scale and centre so the whole widget fits with a small margin."""
         rect = self._content_rect()
@@ -145,6 +166,7 @@ class PreviewView(QGraphicsView):
         self._scene.clear()
         self._layer_items = {name: [] for name, _ in LAYERS}
         self._electrode_items = {}
+        self._net_items = {}
 
         # Fab documentation outline (drawn first / underneath). Shapes come from
         # the geometry itself (rects for a slider, circles for a wheel), matching
@@ -157,6 +179,14 @@ class PreviewView(QGraphicsView):
         crt_pen = self._cosmetic_pen(_COURTYARD, 1.0, dashed=True)
         crt_prim = self._expand_primitive(geo.courtyard_outline, COURTYARD_MARGIN)
         self._register("courtyard", self._add_primitive(crt_prim, crt_pen))
+
+        # The trackpad is two-layer (F.Cu diamonds + B.Cu via-bridges); slider and
+        # wheel are single-layer electrodes. Branch on the geometry type so each
+        # draws faithfully (the WYSIWYG guarantee) rather than via a lossy shim.
+        if isinstance(geo, TrackpadGeometry):
+            self._draw_trackpad(geo)
+            self.setSceneRect(self._content_rect())
+            return
 
         # Electrodes.
         for e in geo.electrodes:
@@ -191,6 +221,58 @@ class PreviewView(QGraphicsView):
             self._register("labels", label)
 
         self.setSceneRect(self._content_rect())
+
+    def _draw_trackpad(self, geo: TrackpadGeometry) -> None:
+        """Render a trackpad: F.Cu diamonds/rows, B.Cu straps, and vias, by layer."""
+        via_d = geo.params.via_diameter
+        drill = geo.params.via_drill
+        for net in geo.nets:
+            items = self._net_items.setdefault(net.pad_number, [])
+            # B.Cu straps first (drawn under the F.Cu copper).
+            for poly in net.bcu:
+                item = self._scene.addPolygon(
+                    _qpoly(polygon_points(poly)), self._cosmetic_pen(_BCU_EDGE, 1.0),
+                    QBrush(_BCU_FILL),
+                )
+                self._register("back_copper", item)
+                items.append(item)
+            # F.Cu copper (diamonds + Rx necks).
+            for poly in net.fcu:
+                item = self._scene.addPolygon(
+                    _qpoly(polygon_points(poly)), self._cosmetic_pen(_COPPER_EDGE, 1.2),
+                    QBrush(_COPPER_FILL),
+                )
+                self._register("copper", item)
+                items.append(item)
+            # Vias: outer annulus + drilled hole.
+            for via in net.vias:
+                ax, ay = via.at
+                ring = self._scene.addEllipse(
+                    QRectF(ax - via_d / 2, ay - via_d / 2, via_d, via_d),
+                    self._cosmetic_pen(_VIA_EDGE, 1.0), QBrush(_VIA_FILL),
+                )
+                hole = self._scene.addEllipse(
+                    QRectF(ax - drill / 2, ay - drill / 2, drill, drill),
+                    self._cosmetic_pen(_VIA_EDGE, 1.0), QBrush(_BG),
+                )
+                self._register("vias", ring)
+                self._register("vias", hole)
+            # Anchor marker + pad-number label at the net's anchor.
+            ax, ay = net.anchor
+            r = 0.3
+            dot = self._scene.addEllipse(
+                QRectF(ax - r, ay - r, 2 * r, 2 * r),
+                self._cosmetic_pen(_ANCHOR, 1.0), QBrush(_ANCHOR),
+            )
+            self._register("anchors", dot)
+            label = self._scene.addSimpleText(net.pad_number)
+            label.setBrush(QBrush(_LABEL))
+            br = label.boundingRect()
+            if br.height() > 0:
+                scale = 2.0 / br.height()
+                label.setScale(scale)
+                label.setPos(ax - br.width() * scale / 2.0, ay - br.height() * scale / 2.0)
+            self._register("labels", label)
 
     def _register(self, layer: str, item) -> None:
         item.setVisible(self._layer_visible[layer])

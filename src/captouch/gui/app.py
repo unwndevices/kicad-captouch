@@ -30,11 +30,12 @@ from PySide6.QtWidgets import (
 )
 
 from ..export import footprint, symbol
-from ..geometry import WheelGeometry
+from ..geometry import TrackpadGeometry, WheelGeometry
 from ..geometry._base import GeometryError
 from ..params import SliderError
 from .panel import ParamPanel
 from .preview import LAYERS, PreviewView, WidgetGeometry
+from .trackpad_panel import TrackpadPanel
 from .wheel_panel import WheelPanel
 
 __all__ = ["MainWindow", "run", "main"]
@@ -43,12 +44,20 @@ _OK_STYLE = "color: #8fce8f;"
 _ERR_STYLE = "color: #e88; font-weight: 600;"
 
 # (label, panel factory) per selectable widget type.
-_WIDGETS = (("Slider", ParamPanel), ("Wheel", WheelPanel))
+_WIDGETS = (("Slider", ParamPanel), ("Wheel", WheelPanel), ("Trackpad", TrackpadPanel))
 
 
 def _summary(geo: WidgetGeometry) -> str:
     """One-line description of the built geometry for the status bar."""
     p = geo.params
+    if isinstance(geo, TrackpadGeometry):
+        minx, miny, maxx, maxy = geo.bounds
+        return (
+            f"mutual-cap trackpad — {p.num_rows}×{p.num_cols} diamonds "
+            f"({len(geo.rx_nets)} Rx + {len(geo.tx_nets)} Tx, {p.num_nodes} nodes) · "
+            f"pitch {p.diamond_pitch:.2f} gap {p.diamond_gap:.2f} mm · "
+            f"extent {maxx - minx:.2f} × {maxy - miny:.2f} mm"
+        )
     if isinstance(geo, WheelGeometry):
         return (
             f"{p.segment_shape} wheel — {len(geo.electrodes)} electrodes, "
@@ -188,8 +197,14 @@ class MainWindow(QMainWindow):
         name = self._geo.params.name
         fp_path = directory / f"{name}.kicad_mod"
         sym_path = directory / f"{name}.kicad_sym"
-        fp_path.write_text(footprint.widget_footprint_text(self._geo), encoding="utf-8")
-        sym_path.write_text(symbol.widget_symbol_lib_text(self._geo), encoding="utf-8")
+        if isinstance(self._geo, TrackpadGeometry):
+            fp_text = footprint.trackpad_footprint_text(self._geo)
+            sym_text = symbol.trackpad_symbol_lib_text(self._geo)
+        else:
+            fp_text = footprint.widget_footprint_text(self._geo)
+            sym_text = symbol.widget_symbol_lib_text(self._geo)
+        fp_path.write_text(fp_text, encoding="utf-8")
+        sym_path.write_text(sym_text, encoding="utf-8")
         return fp_path, sym_path
 
     def _on_export(self) -> None:

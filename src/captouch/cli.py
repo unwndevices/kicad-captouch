@@ -16,6 +16,8 @@ from pathlib import Path
 from .export import footprint, symbol
 from .geometry import build_slider, build_trackpad, build_wheel
 from .params import (
+    DEFAULT_PROFILE,
+    FAB_PROFILES,
     SLIDER_PRESETS,
     TRACKPAD_PRESETS,
     WHEEL_PRESETS,
@@ -23,12 +25,50 @@ from .params import (
     SliderParams,
     TrackpadParams,
     WheelParams,
+    check_fab,
 )
 
 SPIKE_NAME = "CT_Spike_Pad"
 
 # A simple 6 mm square electrode outline (mm) for the format spike.
 SPIKE_POLYGON: list[tuple[float, float]] = [(-3, -3), (3, -3), (3, 3), (-3, 3)]
+
+
+# --------------------------------------------------------------------------- #
+# fab-rule guards (shared across slider / wheel / trackpad)
+# --------------------------------------------------------------------------- #
+def _add_fab_args(p: argparse.ArgumentParser) -> None:
+    """Add the shared fab-rule flags to a widget subparser."""
+    p.add_argument("--fab-profile", choices=sorted(FAB_PROFILES), default=DEFAULT_PROFILE,
+                   help=f"fab-capability profile to check against (default: {DEFAULT_PROFILE})")
+    p.add_argument("--strict", action="store_true",
+                   help="treat fab-rule violations as a hard error (refuse to generate)")
+    p.add_argument("--list-fab-profiles", action="store_true",
+                   help="list fab profiles and exit")
+
+
+def _list_fab_profiles() -> int:
+    for key in sorted(FAB_PROFILES):
+        r = FAB_PROFILES[key]
+        print(f"{key:9} {r.description}")
+        print(f"          track {r.min_track_width} clearance {r.min_clearance} "
+              f"drill {r.min_drill} annular {r.min_annular_ring} mm")
+    return 0
+
+
+def _report_fab(violations, profile_key: str, *, strict: bool) -> None:
+    """Print the fab-rule *violations* as warnings (or errors under *strict*)."""
+    if not violations:
+        return
+    rules = FAB_PROFILES[profile_key]
+    head = "error" if strict else "warning"
+    print(f"{head}: {len(violations)} fab-rule issue(s) vs the '{rules.name}' profile "
+          f"({rules.description}):")
+    for v in violations:
+        print(f"  - {v.message}")
+    if strict:
+        print("  refusing to generate under --strict — relax the geometry, pick a "
+              "finer --fab-profile, or drop --strict")
 
 
 # --------------------------------------------------------------------------- #
@@ -63,6 +103,8 @@ def _params_from_args(args: argparse.Namespace) -> SliderParams:
 
 
 def _slider(args: argparse.Namespace) -> int:
+    if args.list_fab_profiles:
+        return _list_fab_profiles()
     if args.list_presets:
         for key, p in SLIDER_PRESETS.items():
             print(f"{key:10} {p.name}  ({p.num_segments} seg, {p.segment_shape})")
@@ -74,6 +116,11 @@ def _slider(args: argparse.Namespace) -> int:
     except SliderError as exc:
         print(f"error: {exc}")
         return 2
+
+    violations = check_fab(params, args.fab_profile)
+    if violations and args.strict:
+        _report_fab(violations, args.fab_profile, strict=True)
+        return 3
 
     args.out.mkdir(parents=True, exist_ok=True)
     fp_path = args.out / f"{params.name}.kicad_mod"
@@ -90,6 +137,7 @@ def _slider(args: argparse.Namespace) -> int:
         f"W={params.width:.2f} A={params.air_gap:.2f} H={params.segment_height:.2f} mm, "
         f"extent {maxx - minx:.2f} x {maxy - miny:.2f} mm"
     )
+    _report_fab(violations, args.fab_profile, strict=False)
     return 0
 
 
@@ -115,6 +163,7 @@ def _add_slider_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--tip-radius", type=float, help="chevron tooth-tip rounding (mm)")
     p.add_argument("--relax-finger-constraint", action="store_true",
                    help="skip the W+2A=finger check")
+    _add_fab_args(p)
     p.set_defaults(func=_slider)
 
 
@@ -150,6 +199,8 @@ def _wheel_params_from_args(args: argparse.Namespace) -> WheelParams:
 
 
 def _wheel(args: argparse.Namespace) -> int:
+    if args.list_fab_profiles:
+        return _list_fab_profiles()
     if args.list_presets:
         for key, p in WHEEL_PRESETS.items():
             print(f"{key:10} {p.name}  ({p.num_segments} seg, {p.segment_shape})")
@@ -161,6 +212,11 @@ def _wheel(args: argparse.Namespace) -> int:
     except SliderError as exc:  # WheelError subclasses SliderError
         print(f"error: {exc}")
         return 2
+
+    violations = check_fab(params, args.fab_profile)
+    if violations and args.strict:
+        _report_fab(violations, args.fab_profile, strict=True)
+        return 3
 
     args.out.mkdir(parents=True, exist_ok=True)
     fp_path = args.out / f"{params.name}.kicad_mod"
@@ -176,6 +232,7 @@ def _wheel(args: argparse.Namespace) -> int:
         f"OD={params.outer_diameter:.2f} mm, centre hole "
         f"{params.center_hole_diameter:.2f} mm"
     )
+    _report_fab(violations, args.fab_profile, strict=False)
     return 0
 
 
@@ -201,6 +258,7 @@ def _add_wheel_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--arc-resolution", type=int, help="circle tessellation: segments per 90deg")
     p.add_argument("--relax-finger-constraint", action="store_true",
                    help="skip the W+2A=finger check")
+    _add_fab_args(p)
     p.set_defaults(func=_wheel)
 
 
@@ -230,6 +288,8 @@ def _trackpad_params_from_args(args: argparse.Namespace) -> TrackpadParams:
 
 
 def _trackpad(args: argparse.Namespace) -> int:
+    if args.list_fab_profiles:
+        return _list_fab_profiles()
     if args.list_presets:
         for key, p in TRACKPAD_PRESETS.items():
             print(f"{key:10} {p.name}  ({p.num_rows}x{p.num_cols} diamonds)")
@@ -241,6 +301,11 @@ def _trackpad(args: argparse.Namespace) -> int:
     except SliderError as exc:  # TrackpadError subclasses SliderError
         print(f"error: {exc}")
         return 2
+
+    violations = check_fab(params, args.fab_profile)
+    if violations and args.strict:
+        _report_fab(violations, args.fab_profile, strict=True)
+        return 3
 
     args.out.mkdir(parents=True, exist_ok=True)
     fp_path = args.out / f"{params.name}.kicad_mod"
@@ -256,6 +321,7 @@ def _trackpad(args: argparse.Namespace) -> int:
         f"pitch={params.diamond_pitch:.2f} gap={params.diamond_gap:.2f} mm, "
         f"extent {params.width:.2f} x {params.height:.2f} mm"
     )
+    _report_fab(violations, args.fab_profile, strict=False)
     return 0
 
 
@@ -273,6 +339,7 @@ def _add_trackpad_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--bridge-width", type=float, help="F.Cu neck / B.Cu strap width (mm)")
     p.add_argument("--via-drill", type=float, help="bridge via finished hole diameter (mm)")
     p.add_argument("--via-diameter", type=float, help="bridge via outer copper diameter (mm)")
+    _add_fab_args(p)
     p.set_defaults(func=_trackpad)
 
 

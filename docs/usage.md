@@ -44,8 +44,9 @@ Each command writes two files into the output directory (default `./examples`):
 
 ## The CLI
 
-Three generator subcommands — `slider`, `wheel`, `trackpad` — plus `gui`. Run any
-with `--help` for the full parameter list.
+Three generator subcommands — `slider`, `wheel`, `trackpad` — plus `from-params`
+(regenerate from a saved parameter set) and `gui`. Run any with `--help` for the
+full parameter list.
 
 ### Options shared by every generator
 
@@ -58,6 +59,7 @@ with `--help` for the full parameter list.
 | `--fab-profile {default,jlcpcb,oshpark}` | Fab capability to check against (default `default`). |
 | `--strict` | Treat fab-rule violations as a hard error (refuse to generate). |
 | `--list-fab-profiles` | Print the fab profiles and their limits, and exit. |
+| `--save-params FILE` | Also write the resolved parameters as JSON (replay with `from-params`). |
 
 `--version` prints the version; flags left unset fall back to the preset (or the
 built-in defaults).
@@ -145,6 +147,21 @@ wrote examples/CT_Trackpad.kicad_sym
     - Tx7: 49% area remaining
 ```
 
+### Saving & loading parameters
+
+Any generator can dump the **resolved** parameters it used as JSON with
+`--save-params FILE`; `from-params` replays that file — picking the right widget
+automatically — to regenerate byte-identical output:
+
+```sh
+captouch slider --preset infineon --num-segments 7 --save-params slider.json
+captouch from-params slider.json -o build/    # regenerates the same .kicad_mod/.kicad_sym
+```
+
+`from-params` also accepts `-o/--out` and the fab-rule flags. The JSON is the same
+format the GUI's **Save params…** / **Load params…** buttons read and write, so a
+set saved from the CLI loads in the GUI and vice-versa.
+
 ## Fab-rule guards
 
 The design constraints keep an electrode *electrically* sensible; the fab guards
@@ -206,6 +223,12 @@ captouch gui            # or: captouch-gui
   for the trackpad).
 - A **Fab profile** selector re-checks the design live; any violation appears in a
   non-blocking amber banner under the preview.
+- Every field carries a hover **tooltip**; an invalid value outlines the offending
+  control (the same message shows in the status bar).
+- **Save image…** exports the preview as a PNG (raster) or SVG (vector).
+- **Save params… / Load params…** write or read the current parameters as JSON
+  (Load switches to the matching widget); interchangeable with the CLI's
+  `--save-params` / `from-params`.
 - **Export footprint + symbol…** writes the pair for the geometry on screen.
 
 `captouch gui --check` constructs the app and exits immediately — a headless smoke

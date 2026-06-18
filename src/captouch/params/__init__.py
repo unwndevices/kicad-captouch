@@ -17,6 +17,13 @@ from .fab import (
     FabViolation,
     check_fab,
 )
+from .serialize import (
+    WidgetParams,
+    params_from_dict,
+    params_from_json,
+    params_to_dict,
+    params_to_json,
+)
 from .slider import (
     SLIDER_PRESETS,
     SliderError,
@@ -40,6 +47,11 @@ from .wheel import (
 )
 
 __all__ = [
+    "WidgetParams",
+    "params_to_dict",
+    "params_from_dict",
+    "params_to_json",
+    "params_from_json",
     "SliderParams",
     "SliderError",
     "validate_slider",

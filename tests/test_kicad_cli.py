@@ -11,12 +11,11 @@ import shutil
 import subprocess
 
 import pytest
+from _board import trackpad_net_map, widget_board_text
 
 from captouch.export import footprint, symbol
 from captouch.geometry import build_slider, build_trackpad, build_wheel
 from captouch.params import SliderParams, TrackpadParams, WheelParams
-
-from _board import trackpad_net_map, widget_board_text
 
 KICAD_CLI = shutil.which("kicad-cli")
 pytestmark = pytest.mark.skipif(KICAD_CLI is None, reason="kicad-cli not installed")
@@ -25,22 +24,34 @@ SHAPES = ["rectangular", "chevron", "interdigitated"]
 
 
 def _wheel(shape):
-    kw = dict(name="CT_Wheel", num_segments=5, segment_shape=shape,
-              ring_width=5.0, air_gap=0.5, finger_diameter=8.0)
+    kw = dict(
+        name="CT_Wheel",
+        num_segments=5,
+        segment_shape=shape,
+        ring_width=5.0,
+        air_gap=0.5,
+        finger_diameter=8.0,
+    )
     if shape == "rectangular":
         kw["segment_width"] = 7.0
     return build_wheel(WheelParams(**kw))
 
 
 def _run(*args):
-    return subprocess.run(
-        [KICAD_CLI, *args], capture_output=True, text=True, check=False
-    )
+    return subprocess.run([KICAD_CLI, *args], capture_output=True, text=True, check=False)
 
 
 def _drc(board_path, out_json):
-    proc = _run("pcb", "drc", "--format", "json", "--severity-all",
-                "--output", str(out_json), str(board_path))
+    proc = _run(
+        "pcb",
+        "drc",
+        "--format",
+        "json",
+        "--severity-all",
+        "--output",
+        str(out_json),
+        str(board_path),
+    )
     assert proc.returncode == 0, proc.stderr or proc.stdout
     return json.loads(out_json.read_text())
 
@@ -54,8 +65,9 @@ def test_footprint_renders(shape, tmp_path):
     svg_dir = tmp_path / "svg"
     svg_dir.mkdir()  # kicad-cli does not create the output dir (and exits 0 if it fails)
 
-    proc = _run("fp", "export", "svg", "--footprint", "CT_Slider",
-                "--output", str(svg_dir), str(pretty))
+    proc = _run(
+        "fp", "export", "svg", "--footprint", "CT_Slider", "--output", str(svg_dir), str(pretty)
+    )
     assert proc.returncode == 0 and "Error" not in proc.stdout, proc.stdout + proc.stderr
     assert (svg_dir / "CT_Slider.svg").exists()
 
@@ -84,10 +96,14 @@ def test_drc_clean(shape, tmp_path):
 def test_drc_catches_undersized_gap(tmp_path):
     # Negative control: a sub-clearance gap MUST be flagged, proving the DRC
     # gate is real and not vacuously passing on netless copper.
-    geo = build_slider(SliderParams(
-        name="TinyGap", segment_shape="rectangular",
-        air_gap=0.05, relax_finger_constraint=True,
-    ))
+    geo = build_slider(
+        SliderParams(
+            name="TinyGap",
+            segment_shape="rectangular",
+            air_gap=0.05,
+            relax_finger_constraint=True,
+        )
+    )
     board = tmp_path / "tiny.kicad_pcb"
     board.write_text(widget_board_text(geo))
     report = _drc(board, tmp_path / "tiny.json")
@@ -107,8 +123,9 @@ def test_wheel_footprint_renders(shape, tmp_path):
     svg_dir = tmp_path / "svg"
     svg_dir.mkdir()
 
-    proc = _run("fp", "export", "svg", "--footprint", "CT_Wheel",
-                "--output", str(svg_dir), str(pretty))
+    proc = _run(
+        "fp", "export", "svg", "--footprint", "CT_Wheel", "--output", str(svg_dir), str(pretty)
+    )
     assert proc.returncode == 0 and "Error" not in proc.stdout, proc.stdout + proc.stderr
     assert (svg_dir / "CT_Wheel.svg").exists()
 
@@ -127,9 +144,18 @@ def test_wheel_sharp_chevron_tips_sliver(tmp_path):
     # Negative control: with tip rounding disabled, a chevron wheel's acute tips
     # taper to copper slivers — proving the default tip_radius relief (which
     # makes test_wheel_drc_clean[chevron] pass) is doing real work.
-    geo = build_wheel(WheelParams(name="Sharp", segment_shape="chevron",
-                                  num_segments=5, ring_width=5.0, air_gap=0.5,
-                                  finger_diameter=8.0, tip_radius=0.0, corner_radius=0.0))
+    geo = build_wheel(
+        WheelParams(
+            name="Sharp",
+            segment_shape="chevron",
+            num_segments=5,
+            ring_width=5.0,
+            air_gap=0.5,
+            finger_diameter=8.0,
+            tip_radius=0.0,
+            corner_radius=0.0,
+        )
+    )
     board = tmp_path / "sharp.kicad_pcb"
     board.write_text(widget_board_text(geo))
     report = _drc(board, tmp_path / "sharp.json")
@@ -161,15 +187,20 @@ def test_trackpad_footprint_renders(tmp_path):
     (pretty / "CT_Trackpad.kicad_mod").write_text(footprint.trackpad_footprint_text(geo))
     svg_dir = tmp_path / "svg"
     svg_dir.mkdir()
-    proc = _run("fp", "export", "svg", "--footprint", "CT_Trackpad",
-                "--output", str(svg_dir), str(pretty))
+    proc = _run(
+        "fp", "export", "svg", "--footprint", "CT_Trackpad", "--output", str(svg_dir), str(pretty)
+    )
     assert proc.returncode == 0 and "Error" not in proc.stdout, proc.stdout + proc.stderr
     assert (svg_dir / "CT_Trackpad.svg").exists()
 
 
-@pytest.mark.parametrize("kw", [
-    {"mask_shape": "rrect", "corner_radius": 2.0}, {"mask_shape": "circle"},
-])
+@pytest.mark.parametrize(
+    "kw",
+    [
+        {"mask_shape": "rrect", "corner_radius": 2.0},
+        {"mask_shape": "circle"},
+    ],
+)
 def test_trackpad_masked_footprint_renders(kw, tmp_path):
     geo = build_trackpad(TrackpadParams(name="CT_Trackpad", num_rows=4, num_cols=4, **kw))
     pretty = tmp_path / "lib.pretty"
@@ -177,19 +208,23 @@ def test_trackpad_masked_footprint_renders(kw, tmp_path):
     (pretty / "CT_Trackpad.kicad_mod").write_text(footprint.trackpad_footprint_text(geo))
     svg_dir = tmp_path / "svg"
     svg_dir.mkdir()
-    proc = _run("fp", "export", "svg", "--footprint", "CT_Trackpad",
-                "--output", str(svg_dir), str(pretty))
+    proc = _run(
+        "fp", "export", "svg", "--footprint", "CT_Trackpad", "--output", str(svg_dir), str(pretty)
+    )
     assert proc.returncode == 0 and "Error" not in proc.stdout, proc.stdout + proc.stderr
     assert (svg_dir / "CT_Trackpad.svg").exists()
 
 
 @pytest.mark.parametrize("rows,cols", [(4, 4), (5, 5), (6, 6)])
-@pytest.mark.parametrize("kw", [
-    {"mask_shape": "rrect", "corner_radius": 2.0},
-    {"mask_shape": "circle"},
-    {"mask_shape": "rrect", "corner_radius": 2.0, "clip_mode": "conform"},
-    {"mask_shape": "circle", "clip_mode": "conform"},
-])
+@pytest.mark.parametrize(
+    "kw",
+    [
+        {"mask_shape": "rrect", "corner_radius": 2.0},
+        {"mask_shape": "circle"},
+        {"mask_shape": "rrect", "corner_radius": 2.0, "clip_mode": "conform"},
+        {"mask_shape": "circle", "clip_mode": "conform"},
+    ],
+)
 def test_trackpad_masked_copper_drc_clean(kw, rows, cols, tmp_path):
     # Clipped circle/rrect copper must be DRC-clean AND fully connected across the
     # sizes where the mask drops corner diamonds, in BOTH clip modes: an empty
@@ -204,16 +239,20 @@ def test_trackpad_masked_copper_drc_clean(kw, rows, cols, tmp_path):
     assert report["unconnected_items"] == [], report["unconnected_items"]
 
 
-@pytest.mark.parametrize("kw", [
-    {"mask_shape": "circle", "clip_mode": "conform"},
-    {"mask_shape": "rrect", "corner_radius": 6.0, "clip_mode": "conform"},
-])
+@pytest.mark.parametrize(
+    "kw",
+    [
+        {"mask_shape": "circle", "clip_mode": "conform"},
+        {"mask_shape": "rrect", "corner_radius": 6.0, "clip_mode": "conform"},
+    ],
+)
 def test_trackpad_conform_large_drc_clean(kw, tmp_path):
     # A larger conform pad cuts many rim diamonds into partial channels; it must
     # still pass DRC and stay fully connected. The circle case here also leaves
     # below-threshold partials, exercising the rim where the cut is deepest.
-    geo = build_trackpad(TrackpadParams(name="CT_Trackpad", num_rows=7, num_cols=7,
-                                        diamond_pitch=6.0, **kw))
+    geo = build_trackpad(
+        TrackpadParams(name="CT_Trackpad", num_rows=7, num_cols=7, diamond_pitch=6.0, **kw)
+    )
     if kw["mask_shape"] == "circle":
         assert geo.partial_channels(), "expected sub-threshold rim channels to report"
     board = tmp_path / "board.kicad_pcb"
@@ -226,8 +265,9 @@ def test_trackpad_conform_large_drc_clean(kw, tmp_path):
 def test_trackpad_drc_catches_undersized_gap(tmp_path):
     # Negative control: shrinking the gap (and neck) below the fab clearance MUST
     # be flagged — proving Rx and Tx sit on distinct nets and the gate is real.
-    geo = build_trackpad(TrackpadParams(name="TinyGap", num_rows=3, num_cols=3,
-                                        diamond_gap=0.12, bridge_width=0.08))
+    geo = build_trackpad(
+        TrackpadParams(name="TinyGap", num_rows=3, num_cols=3, diamond_gap=0.12, bridge_width=0.08)
+    )
     board = tmp_path / "tiny.kicad_pcb"
     board.write_text(widget_board_text(geo, nets=trackpad_net_map(geo)))
     report = _drc(board, tmp_path / "tiny.json")

@@ -288,13 +288,9 @@ def _validate_mask(p: TrackpadParams) -> None:
     row or column depends on the actual clipped copper and is hard-errored at
     build time, not here.)"""
     if p.mask_shape not in MASK_SHAPES:
-        raise TrackpadError(
-            f"mask_shape must be one of {MASK_SHAPES}, got {p.mask_shape!r}"
-        )
+        raise TrackpadError(f"mask_shape must be one of {MASK_SHAPES}, got {p.mask_shape!r}")
     if p.clip_mode not in CLIP_MODES:
-        raise TrackpadError(
-            f"clip_mode must be one of {CLIP_MODES}, got {p.clip_mode!r}"
-        )
+        raise TrackpadError(f"clip_mode must be one of {CLIP_MODES}, got {p.clip_mode!r}")
     if p.min_feature < 0:
         raise TrackpadError(f"min_feature must be >= 0, got {p.min_feature}")
     half_min = min(p.width, p.height) / 2.0

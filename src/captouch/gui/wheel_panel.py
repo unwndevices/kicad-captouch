@@ -122,7 +122,9 @@ class WheelPanel(PanelBase):
         return WheelParams(
             num_segments=self.num_segments.value(),
             segment_shape=self.shape.currentText(),
-            segment_width=None if self.segment_width_auto.isChecked() else self.segment_width.value(),
+            segment_width=None
+            if self.segment_width_auto.isChecked()
+            else self.segment_width.value(),
             ring_width=self.ring_width.value(),
             air_gap=self.air_gap.value(),
             finger_diameter=self.finger_diameter.value(),

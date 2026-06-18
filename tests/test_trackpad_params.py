@@ -44,8 +44,9 @@ def test_trackpad_error_is_a_slider_error():
     assert issubclass(TrackpadError, SliderError)
 
 
-@pytest.mark.parametrize("field,value", [("num_rows", 2), ("num_cols", 2),
-                                         ("num_rows", 17), ("num_cols", 17)])
+@pytest.mark.parametrize(
+    "field,value", [("num_rows", 2), ("num_cols", 2), ("num_rows", 17), ("num_cols", 17)]
+)
 def test_reject_line_counts_out_of_range(field, value):
     with pytest.raises(TrackpadError, match="3..16"):
         validate_trackpad(TrackpadParams(**{field: value}))
@@ -116,8 +117,9 @@ def test_reject_unknown_clip_mode():
 
 
 def test_conform_clip_mode_validates():
-    validate_trackpad(TrackpadParams(num_rows=4, num_cols=4,
-                                     mask_shape="circle", clip_mode="conform"))
+    validate_trackpad(
+        TrackpadParams(num_rows=4, num_cols=4, mask_shape="circle", clip_mode="conform")
+    )
 
 
 def test_reject_negative_min_feature():
@@ -131,8 +133,9 @@ def test_rrect_requires_positive_bounded_corner_radius():
         validate_trackpad(TrackpadParams(mask_shape="rrect", corner_radius=0.0))
     # > min(width, height)/2 (3x3 @5 → 7.5) is rejected.
     with pytest.raises(TrackpadError, match="corner_radius"):
-        validate_trackpad(TrackpadParams(num_rows=3, num_cols=3,
-                                         mask_shape="rrect", corner_radius=8.0))
+        validate_trackpad(
+            TrackpadParams(num_rows=3, num_cols=3, mask_shape="rrect", corner_radius=8.0)
+        )
 
 
 def test_corner_radius_rejected_unless_rrect():
@@ -142,12 +145,10 @@ def test_corner_radius_rejected_unless_rrect():
 
 def test_circle_radius_bounds():
     validate_trackpad(TrackpadParams(num_rows=4, num_cols=4, mask_shape="circle"))
-    validate_trackpad(TrackpadParams(num_rows=4, num_cols=4,
-                                     mask_shape="circle", radius=5.0))
+    validate_trackpad(TrackpadParams(num_rows=4, num_cols=4, mask_shape="circle", radius=5.0))
     # radius > inscribed (4x4 @5 → 20 mm → max 10) clips no copper → rejected.
     with pytest.raises(TrackpadError, match="radius"):
-        validate_trackpad(TrackpadParams(num_rows=4, num_cols=4,
-                                         mask_shape="circle", radius=12.0))
+        validate_trackpad(TrackpadParams(num_rows=4, num_cols=4, mask_shape="circle", radius=12.0))
 
 
 def test_radius_rejected_unless_circle():

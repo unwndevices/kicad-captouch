@@ -43,12 +43,15 @@ def test_tooth_depth_must_be_below_half_width():
         validate_slider(p)
 
 
-@pytest.mark.parametrize("bad", [
-    dict(air_gap=0.0),
-    dict(segment_height=0.0),
-    dict(end_dummies=3),
-    dict(segment_width=-1.0, relax_finger_constraint=True),
-])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        dict(air_gap=0.0),
+        dict(segment_height=0.0),
+        dict(end_dummies=3),
+        dict(segment_width=-1.0, relax_finger_constraint=True),
+    ],
+)
 def test_out_of_range_values_rejected(bad):
     with pytest.raises(SliderError):
         validate_slider(SliderParams(**bad))

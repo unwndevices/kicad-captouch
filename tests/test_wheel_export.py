@@ -16,8 +16,14 @@ SHAPES = ["rectangular", "chevron", "interdigitated"]
 
 
 def _params(shape, **kw):
-    base = dict(name="CT_Wheel", num_segments=5, segment_shape=shape,
-                ring_width=5.0, air_gap=0.5, finger_diameter=8.0)
+    base = dict(
+        name="CT_Wheel",
+        num_segments=5,
+        segment_shape=shape,
+        ring_width=5.0,
+        air_gap=0.5,
+        finger_diameter=8.0,
+    )
     if shape == "rectangular":
         base.update(segment_width=7.0)
     base.update(kw)
@@ -86,18 +92,34 @@ def test_emitted_text_round_trips(shape):
 
 
 def test_rectangular_golden_footprint():
-    geo = build_wheel(WheelParams(name="CT_Wheel_Rect", segment_shape="rectangular",
-                                  num_segments=4, segment_width=7.0, ring_width=5.0,
-                                  air_gap=0.5, finger_diameter=8.0))
+    geo = build_wheel(
+        WheelParams(
+            name="CT_Wheel_Rect",
+            segment_shape="rectangular",
+            num_segments=4,
+            segment_width=7.0,
+            ring_width=5.0,
+            air_gap=0.5,
+            finger_diameter=8.0,
+        )
+    )
     text = footprint.wheel_footprint_text(geo)
     golden = (GOLDEN / "CT_Wheel_Rect.kicad_mod").read_text()
     assert text == golden
 
 
 def test_rectangular_golden_symbol():
-    geo = build_wheel(WheelParams(name="CT_Wheel_Rect", segment_shape="rectangular",
-                                  num_segments=4, segment_width=7.0, ring_width=5.0,
-                                  air_gap=0.5, finger_diameter=8.0))
+    geo = build_wheel(
+        WheelParams(
+            name="CT_Wheel_Rect",
+            segment_shape="rectangular",
+            num_segments=4,
+            segment_width=7.0,
+            ring_width=5.0,
+            air_gap=0.5,
+            finger_diameter=8.0,
+        )
+    )
     text = symbol.wheel_symbol_lib_text(geo)
     golden = (GOLDEN / "CT_Wheel_Rect.kicad_sym").read_text()
     assert text == golden

@@ -88,8 +88,14 @@ def test_reject_ring_wider_than_radius():
 def test_reject_centre_collision():
     # A wide ring on a small-pitch ring shrinks the hole until the M gaps no
     # longer fit around it (inner arc pitch <= air_gap), though inner_radius > 0.
-    p = WheelParams(num_segments=12, segment_shape="rectangular", segment_width=1.0,
-                    air_gap=1.0, ring_width=6.0, relax_finger_constraint=True)
+    p = WheelParams(
+        num_segments=12,
+        segment_shape="rectangular",
+        segment_width=1.0,
+        air_gap=1.0,
+        ring_width=6.0,
+        relax_finger_constraint=True,
+    )
     assert p.inner_radius > 0  # not caught by the simpler radius check
     with pytest.raises(WheelError, match="centre hole"):
         validate_wheel(p)
@@ -102,12 +108,20 @@ def test_reject_finger_constraint_violation():
 
 def test_relax_finger_constraint_allows_mismatch():
     validate_wheel(
-        WheelParams(segment_width=8.0, air_gap=0.5, finger_diameter=20.0,
-                    relax_finger_constraint=True)
+        WheelParams(
+            segment_width=8.0, air_gap=0.5, finger_diameter=20.0, relax_finger_constraint=True
+        )
     )
 
 
 def test_reject_tooth_depth_at_or_above_half_width():
     with pytest.raises(WheelError, match="tooth_depth"):
-        validate_wheel(WheelParams(segment_shape="chevron", segment_width=7.0,
-                                   air_gap=0.5, finger_diameter=8.0, tooth_depth=4.0))
+        validate_wheel(
+            WheelParams(
+                segment_shape="chevron",
+                segment_width=7.0,
+                air_gap=0.5,
+                finger_diameter=8.0,
+                tooth_depth=4.0,
+            )
+        )

@@ -93,7 +93,11 @@ def polygon_points(poly: Polygon) -> list[Point]:
 
 
 def rounded_rect_points(
-    x1: float, y1: float, x2: float, y2: float, r: float,
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+    r: float,
     segs: int = RRECT_ARC_SEGS,
 ) -> list[Point]:
     """Vertices of a rounded rectangle ``[x1,x2]×[y1,y2]`` with corner radius *r*.
@@ -115,16 +119,15 @@ def rounded_rect_points(
     # visually clockwise path: −90°→top, 0°→right, +90°→bottom, 180°→left.
     corners = [
         (x2 - r, y1 + r, -quarter),  # top-right
-        (x2 - r, y2 - r, 0.0),       # bottom-right
-        (x1 + r, y2 - r, quarter),   # bottom-left
-        (x1 + r, y1 + r, math.pi),   # top-left
+        (x2 - r, y2 - r, 0.0),  # bottom-right
+        (x1 + r, y2 - r, quarter),  # bottom-left
+        (x1 + r, y1 + r, math.pi),  # top-left
     ]
     pts: list[Point] = []
     for cx, cy, a0 in corners:
         for i in range(segs + 1):
             a = a0 + quarter * i / segs
-            pts.append((round(cx + r * math.cos(a), ROUND),
-                        round(cy + r * math.sin(a), ROUND)))
+            pts.append((round(cx + r * math.cos(a), ROUND), round(cy + r * math.sin(a), ROUND)))
     return pts
 
 

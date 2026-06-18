@@ -13,9 +13,7 @@ documentation outline (``F.Fab``). Output targets the KiCad 9.0 footprint format
 
 from __future__ import annotations
 
-from typing import Sequence
-
-from typing import Union
+from typing import Sequence, Union
 
 from .. import __version__, sexpr
 from ..geometry import SliderGeometry, TrackpadGeometry, WheelGeometry
@@ -253,10 +251,7 @@ def widget_footprint(geo: WidgetGeometry) -> list:
         layer="F.CrtYd",
         width=COURTYARD_WIDTH,
     )
-    pads = [
-        custom_polygon_pad(e.points, number=e.pad_number, at=e.anchor)
-        for e in geo.electrodes
-    ]
+    pads = [custom_polygon_pad(e.points, number=e.pad_number, at=e.anchor) for e in geo.electrodes]
 
     return [
         Sym("footprint"),
@@ -322,15 +317,18 @@ def trackpad_footprint(geo: TrackpadGeometry) -> list:
     for net in geo.nets:
         for poly in net.fcu:
             pts = polygon_points(poly)
-            pads.append(custom_polygon_pad(pts, number=net.pad_number,
-                                           at=anchor_point(poly), layer="F.Cu"))
+            pads.append(
+                custom_polygon_pad(pts, number=net.pad_number, at=anchor_point(poly), layer="F.Cu")
+            )
         for poly in net.bcu:
             pts = polygon_points(poly)
-            pads.append(custom_polygon_pad(pts, number=net.pad_number,
-                                           at=anchor_point(poly), layer="B.Cu"))
+            pads.append(
+                custom_polygon_pad(pts, number=net.pad_number, at=anchor_point(poly), layer="B.Cu")
+            )
         for via in net.vias:
-            pads.append(via_pad(via.at, number=net.pad_number,
-                                 drill=p.via_drill, diameter=p.via_diameter))
+            pads.append(
+                via_pad(via.at, number=net.pad_number, drill=p.via_drill, diameter=p.via_diameter)
+            )
 
     return [
         Sym("footprint"),

@@ -103,9 +103,12 @@ def test_thin_bridge_and_small_via_are_each_flagged():
 
 
 def test_check_accepts_a_fabrules_object_directly():
-    custom = FabRules("loose", min_track_width=0.05, min_clearance=0.05,
-                      min_drill=0.1, min_annular_ring=0.05)
-    assert check_fab(TrackpadParams(bridge_width=0.1, via_drill=0.2, via_diameter=0.4), custom) == []
+    custom = FabRules(
+        "loose", min_track_width=0.05, min_clearance=0.05, min_drill=0.1, min_annular_ring=0.05
+    )
+    assert (
+        check_fab(TrackpadParams(bridge_width=0.1, via_drill=0.2, via_diameter=0.4), custom) == []
+    )
 
 
 def test_unknown_profile_name_raises():

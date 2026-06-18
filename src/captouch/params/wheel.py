@@ -166,13 +166,9 @@ def validate_wheel(p: WheelParams) -> WheelParams:
     Returns *p* unchanged on success so it can be used inline.
     """
     if p.segment_shape not in SEGMENT_SHAPES:
-        raise WheelError(
-            f"segment_shape must be one of {SEGMENT_SHAPES}, got {p.segment_shape!r}"
-        )
+        raise WheelError(f"segment_shape must be one of {SEGMENT_SHAPES}, got {p.segment_shape!r}")
     if p.num_segments < 3:
-        raise WheelError(
-            f"num_segments must be >=3 for a usable wheel, got {p.num_segments}"
-        )
+        raise WheelError(f"num_segments must be >=3 for a usable wheel, got {p.num_segments}")
     if p.width <= 0:
         raise WheelError(
             f"resolved arc width must be > 0, got {p.width:.3f} mm "

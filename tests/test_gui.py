@@ -319,8 +319,9 @@ def test_trackpad_panel_roundtrips_conform(qapp):
     from captouch.gui.trackpad_panel import TrackpadPanel
 
     panel = TrackpadPanel()
-    panel.set_params(TrackpadParams(num_rows=5, num_cols=5,
-                                    mask_shape="circle", clip_mode="conform"))
+    panel.set_params(
+        TrackpadParams(num_rows=5, num_cols=5, mask_shape="circle", clip_mode="conform")
+    )
     assert panel.params().clip_mode == "conform"
 
 

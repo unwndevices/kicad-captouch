@@ -70,8 +70,7 @@ def test_pinch_clearance_matches_design(gap):
     # (Rx neck vs Tx diamond), (gap·√2 − bridge_width)/2 — tighter than the bulk
     # diamond gap. This is the clearance the DRC gate ultimately checks.
     bw = 0.2
-    geo = build_trackpad(TrackpadParams(num_rows=4, num_cols=4,
-                                        diamond_gap=gap, bridge_width=bw))
+    geo = build_trackpad(TrackpadParams(num_rows=4, num_cols=4, diamond_gap=gap, bridge_width=bw))
     expected = (gap * math.sqrt(2.0) - bw) / 2.0
     assert _net_fcu_distance(geo) == pytest.approx(expected, abs=2e-2)
 
@@ -125,9 +124,14 @@ def test_fab_outline_follows_mask_shape():
     assert r == pytest.approx(10.0)  # 4x4 @ 5 mm → 20 mm → inscribed radius 10
 
 
-@pytest.mark.parametrize("shape,kw", [
-    ("rect", {}), ("rrect", {"corner_radius": 2.0}), ("circle", {}),
-])
+@pytest.mark.parametrize(
+    "shape,kw",
+    [
+        ("rect", {}),
+        ("rrect", {"corner_radius": 2.0}),
+        ("circle", {}),
+    ],
+)
 def test_courtyard_follows_mask_shape(shape, kw):
     geo = build_trackpad(TrackpadParams(num_rows=4, num_cols=4, mask_shape=shape, **kw))
     assert geo.courtyard_outline[0] == shape
@@ -176,11 +180,12 @@ def test_curved_mask_clips_corner_copper():
         return sum(p.area for n in geo.nets for p in n.fcu)
 
     rect = build_trackpad(TrackpadParams(num_rows=4, num_cols=4))
-    rr = build_trackpad(TrackpadParams(num_rows=4, num_cols=4,
-                                       mask_shape="rrect", corner_radius=3.0))
+    rr = build_trackpad(
+        TrackpadParams(num_rows=4, num_cols=4, mask_shape="rrect", corner_radius=3.0)
+    )
     circ = build_trackpad(TrackpadParams(num_rows=4, num_cols=4, mask_shape="circle"))
-    assert total_fcu(rr) < total_fcu(rect)      # corners shaved
-    assert total_fcu(circ) < total_fcu(rr)      # a disk removes more than a fillet
+    assert total_fcu(rr) < total_fcu(rect)  # corners shaved
+    assert total_fcu(circ) < total_fcu(rr)  # a disk removes more than a fillet
 
 
 # -- conform clip mode (rim diamonds cut to the curve, Azoteq AZD068 §6) ---- #
@@ -203,8 +208,11 @@ def test_conform_fills_more_copper_than_inscribe():
 def test_conform_rx_rows_single_piece_tx_fully_bridged():
     # Connectivity survives the cut: each Rx row stays one galvanic F.Cu piece and
     # each Tx column's surviving diamonds are joined by (diamonds-1) B.Cu straps.
-    geo = build_trackpad(TrackpadParams(num_rows=7, num_cols=7, diamond_pitch=5.0,
-                                        mask_shape="circle", clip_mode="conform"))
+    geo = build_trackpad(
+        TrackpadParams(
+            num_rows=7, num_cols=7, diamond_pitch=5.0, mask_shape="circle", clip_mode="conform"
+        )
+    )
     for n in geo.rx_nets:
         assert len(n.fcu) == 1
     for n in geo.tx_nets:
@@ -213,8 +221,11 @@ def test_conform_rx_rows_single_piece_tx_fully_bridged():
 
 
 def test_conform_vias_land_on_their_nets_copper():
-    geo = build_trackpad(TrackpadParams(num_rows=7, num_cols=7, diamond_pitch=5.0,
-                                        mask_shape="circle", clip_mode="conform"))
+    geo = build_trackpad(
+        TrackpadParams(
+            num_rows=7, num_cols=7, diamond_pitch=5.0, mask_shape="circle", clip_mode="conform"
+        )
+    )
     for n in geo.tx_nets:
         fcu = unary_union(n.fcu)
         bcu = unary_union(n.bcu)
@@ -225,8 +236,9 @@ def test_conform_vias_land_on_their_nets_copper():
 
 
 def test_conform_copper_stays_inside_the_mask():
-    p = TrackpadParams(num_rows=7, num_cols=7, diamond_pitch=5.0,
-                       mask_shape="circle", clip_mode="conform")
+    p = TrackpadParams(
+        num_rows=7, num_cols=7, diamond_pitch=5.0, mask_shape="circle", clip_mode="conform"
+    )
     geo = build_trackpad(p)
     r = p.effective_radius
     for n in geo.nets:
@@ -255,8 +267,11 @@ def test_rect_mask_has_no_partial_channels():
 
 
 def test_conform_area_fraction_bounds():
-    geo = build_trackpad(TrackpadParams(num_rows=6, num_cols=6, diamond_pitch=5.0,
-                                        mask_shape="circle", clip_mode="conform"))
+    geo = build_trackpad(
+        TrackpadParams(
+            num_rows=6, num_cols=6, diamond_pitch=5.0, mask_shape="circle", clip_mode="conform"
+        )
+    )
     for n in geo.nets:
         assert 0.0 < n.area_fraction <= 1.0
 
@@ -273,8 +288,9 @@ def test_conform_is_a_noop_for_rect_mask():
 
 def test_conform_elongated_circle_errors():
     with pytest.raises(TrackpadError, match="outside the circle mask"):
-        build_trackpad(TrackpadParams(num_rows=3, num_cols=8,
-                                      mask_shape="circle", clip_mode="conform"))
+        build_trackpad(
+            TrackpadParams(num_rows=3, num_cols=8, mask_shape="circle", clip_mode="conform")
+        )
 
 
 def test_rounded_rect_points_form_valid_polygon():
@@ -287,5 +303,8 @@ def test_rounded_rect_points_form_valid_polygon():
 
 def test_rounded_rect_points_degenerate_radius_is_a_rectangle():
     assert rounded_rect_points(-5.0, -4.0, 5.0, 4.0, 0.0) == [
-        (-5.0, -4.0), (5.0, -4.0), (5.0, 4.0), (-5.0, 4.0)
+        (-5.0, -4.0),
+        (5.0, -4.0),
+        (5.0, 4.0),
+        (-5.0, 4.0),
     ]

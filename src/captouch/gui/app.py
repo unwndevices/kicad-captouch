@@ -181,9 +181,11 @@ class MainWindow(QMainWindow):
         self._fab_profile = QComboBox()
         for key in sorted(FAB_PROFILES):
             self._fab_profile.addItem(key)
-            self._fab_profile.setItemData(self._fab_profile.count() - 1,
-                                          FAB_PROFILES[key].description,
-                                          Qt.ItemDataRole.ToolTipRole)
+            self._fab_profile.setItemData(
+                self._fab_profile.count() - 1,
+                FAB_PROFILES[key].description,
+                Qt.ItemDataRole.ToolTipRole,
+            )
         self._fab_profile.setCurrentText(DEFAULT_PROFILE)
         self._fab_profile.currentIndexChanged.connect(self._rebuild)
         bar.addWidget(self._fab_profile)
@@ -224,13 +226,9 @@ class MainWindow(QMainWindow):
         if not violations:
             self._fab_banner.setVisible(False)
             return
-        items = "; ".join(
-            f"{v.feature} {v.value:.3f} < {v.limit:.3f} mm" for v in violations
-        )
+        items = "; ".join(f"{v.feature} {v.value:.3f} < {v.limit:.3f} mm" for v in violations)
         plural = "issue" if len(violations) == 1 else "issues"
-        self._fab_banner.setText(
-            f"⚠ {len(violations)} fab {plural} vs '{profile}': {items}"
-        )
+        self._fab_banner.setText(f"⚠ {len(violations)} fab {plural} vs '{profile}': {items}")
         self._fab_banner.setVisible(True)
 
     def export_to(self, directory: Path) -> tuple[Path, Path]:

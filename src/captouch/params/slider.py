@@ -140,9 +140,7 @@ def validate_slider(p: SliderParams) -> SliderParams:
     Returns *p* unchanged on success so it can be used inline.
     """
     if p.segment_shape not in SEGMENT_SHAPES:
-        raise SliderError(
-            f"segment_shape must be one of {SEGMENT_SHAPES}, got {p.segment_shape!r}"
-        )
+        raise SliderError(f"segment_shape must be one of {SEGMENT_SHAPES}, got {p.segment_shape!r}")
     if p.num_segments < 3:
         raise SliderError(
             f"num_segments must be >=3 for usable interpolation, got {p.num_segments}"

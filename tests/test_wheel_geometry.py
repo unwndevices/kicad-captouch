@@ -14,8 +14,9 @@ SHAPES = ["rectangular", "chevron", "interdigitated"]
 
 
 def _params(shape, **kw):
-    base = dict(num_segments=5, segment_shape=shape, ring_width=5.0, air_gap=0.5,
-                finger_diameter=8.0)
+    base = dict(
+        num_segments=5, segment_shape=shape, ring_width=5.0, air_gap=0.5, finger_diameter=8.0
+    )
     if shape == "rectangular":
         base.update(segment_width=7.0)  # W+2A == finger
     base.update(kw)
@@ -86,8 +87,10 @@ def test_numbering_walks_around_the_ring(shape):
     # Each consecutive pad sits one segment-step further around the ring (the
     # step wraps cleanly past the +x axis between the last pad and the first).
     step = 2 * math.pi / m
-    angs = [math.atan2(e.polygon.centroid.y, e.polygon.centroid.x) % (2 * math.pi)
-            for e in geo.electrodes]
+    angs = [
+        math.atan2(e.polygon.centroid.y, e.polygon.centroid.x) % (2 * math.pi)
+        for e in geo.electrodes
+    ]
     diffs = [(angs[(i + 1) % m] - angs[i]) % (2 * math.pi) for i in range(m)]
     assert all(abs(d - step) < 0.15 for d in diffs), diffs
 

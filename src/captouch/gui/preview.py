@@ -15,11 +15,11 @@ This module imports Qt but **no exporter and no file I/O** — it only draws.
 
 from __future__ import annotations
 
+from typing import Union
+
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import QGraphicsScene, QGraphicsView
-
-from typing import Union
 
 from ..export.footprint import COURTYARD_MARGIN
 from ..geometry import Electrode, SliderGeometry, TrackpadGeometry, WheelGeometry
@@ -80,9 +80,7 @@ class PreviewView(QGraphicsView):
         self._scene = QGraphicsScene(self)
         self.setScene(self._scene)
 
-        self.setRenderHints(
-            QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing
-        )
+        self.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
         self.setBackgroundBrush(QBrush(_BG))
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
@@ -141,7 +139,9 @@ class PreviewView(QGraphicsView):
             return
         pad_x = rect.width() * _FIT_MARGIN
         pad_y = rect.height() * _FIT_MARGIN
-        self.fitInView(rect.adjusted(-pad_x, -pad_y, pad_x, pad_y), Qt.AspectRatioMode.KeepAspectRatio)
+        self.fitInView(
+            rect.adjusted(-pad_x, -pad_y, pad_x, pad_y), Qt.AspectRatioMode.KeepAspectRatio
+        )
 
     def render_to_image(self, width: int = 1000, height: int = 360) -> QImage:
         """Render the current view to a :class:`QImage` (used for tests/screenshots)."""
@@ -231,7 +231,8 @@ class PreviewView(QGraphicsView):
             # B.Cu straps first (drawn under the F.Cu copper).
             for poly in net.bcu:
                 item = self._scene.addPolygon(
-                    _qpoly(polygon_points(poly)), self._cosmetic_pen(_BCU_EDGE, 1.0),
+                    _qpoly(polygon_points(poly)),
+                    self._cosmetic_pen(_BCU_EDGE, 1.0),
                     QBrush(_BCU_FILL),
                 )
                 self._register("back_copper", item)
@@ -239,7 +240,8 @@ class PreviewView(QGraphicsView):
             # F.Cu copper (diamonds + Rx necks).
             for poly in net.fcu:
                 item = self._scene.addPolygon(
-                    _qpoly(polygon_points(poly)), self._cosmetic_pen(_COPPER_EDGE, 1.2),
+                    _qpoly(polygon_points(poly)),
+                    self._cosmetic_pen(_COPPER_EDGE, 1.2),
                     QBrush(_COPPER_FILL),
                 )
                 self._register("copper", item)
@@ -249,11 +251,13 @@ class PreviewView(QGraphicsView):
                 ax, ay = via.at
                 ring = self._scene.addEllipse(
                     QRectF(ax - via_d / 2, ay - via_d / 2, via_d, via_d),
-                    self._cosmetic_pen(_VIA_EDGE, 1.0), QBrush(_VIA_FILL),
+                    self._cosmetic_pen(_VIA_EDGE, 1.0),
+                    QBrush(_VIA_FILL),
                 )
                 hole = self._scene.addEllipse(
                     QRectF(ax - drill / 2, ay - drill / 2, drill, drill),
-                    self._cosmetic_pen(_VIA_EDGE, 1.0), QBrush(_BG),
+                    self._cosmetic_pen(_VIA_EDGE, 1.0),
+                    QBrush(_BG),
                 )
                 self._register("vias", ring)
                 self._register("vias", hole)
@@ -262,7 +266,8 @@ class PreviewView(QGraphicsView):
             r = 0.3
             dot = self._scene.addEllipse(
                 QRectF(ax - r, ay - r, 2 * r, 2 * r),
-                self._cosmetic_pen(_ANCHOR, 1.0), QBrush(_ANCHOR),
+                self._cosmetic_pen(_ANCHOR, 1.0),
+                QBrush(_ANCHOR),
             )
             self._register("anchors", dot)
             label = self._scene.addSimpleText(net.pad_number)
@@ -289,7 +294,8 @@ class PreviewView(QGraphicsView):
             _, x1, y1, x2, y2, r = prim
             # Same vertex ring the exporter emits, so preview == output.
             return self._scene.addPolygon(
-                _qpoly(rounded_rect_points(x1, y1, x2, y2, r)), pen, no_fill)
+                _qpoly(rounded_rect_points(x1, y1, x2, y2, r)), pen, no_fill
+            )
         if kind == "circle":
             _, cx, cy, r = prim
             return self._scene.addEllipse(QRectF(cx - r, cy - r, 2 * r, 2 * r), pen, no_fill)

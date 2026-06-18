@@ -25,7 +25,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from shapely.geometry import MultiPolygon, Point as GeoPoint, Polygon, box
+from shapely.geometry import MultiPolygon, Polygon, box
+from shapely.geometry import Point as GeoPoint
 from shapely.ops import unary_union
 
 from ..params import (
@@ -113,13 +114,10 @@ class TrackpadGeometry:
         if shape == "circle":
             return ("circle", 0.0, 0.0, round(self.params.effective_radius, ROUND))
         if shape == "rrect":
-            return ("rrect", minx, miny, maxx, maxy,
-                    round(self.params.corner_radius, ROUND))
+            return ("rrect", minx, miny, maxx, maxy, round(self.params.corner_radius, ROUND))
         return ("rect", minx, miny, maxx, maxy)
 
-    def partial_channels(
-        self, threshold: float = DISABLE_AREA_FRACTION
-    ) -> list[tuple[str, float]]:
+    def partial_channels(self, threshold: float = DISABLE_AREA_FRACTION) -> list[tuple[str, float]]:
         """``(pin_name, area_fraction)`` for channels kept below *threshold* of full.
 
         A curved mask reduces edge channels' electrode area — ``inscribe`` by
@@ -128,11 +126,7 @@ class TrackpadGeometry:
         removed (the default ``threshold``). Empty for a rect mask, which clips
         nothing.
         """
-        return [
-            (n.pin_name, n.area_fraction)
-            for n in self.nets
-            if n.area_fraction < threshold
-        ]
+        return [(n.pin_name, n.area_fraction) for n in self.nets if n.area_fraction < threshold]
 
     def symbol_columns(self) -> tuple[list[tuple[str, str]], list[tuple[str, str]]]:
         """``(left, right)`` pin lists: Rx (sense) on the left, Tx (drive) right."""
@@ -221,7 +215,8 @@ def _mask_clip(params: TrackpadParams, x0: float, y0: float, x1: float, y1: floa
     if shape == "rrect":
         cr = params.corner_radius
         return box(x0 + cr, y0 + cr, x1 - cr, y1 - cr).buffer(
-            cr, quad_segs=_CLIP_QUAD_SEGS, join_style="round")
+            cr, quad_segs=_CLIP_QUAD_SEGS, join_style="round"
+        )
     return box(x0, y0, x1, y1)
 
 
@@ -260,8 +255,7 @@ def build_trackpad(params: TrackpadParams) -> TrackpadGeometry:
     # A via pad (outer diameter via_d) only sits safely on a conform partial when its
     # centre clears the cut edge by its own radius; shrink the mask by via_d/2 to
     # test that. (voff already keeps the centre clear of the diamond's straight edges.)
-    clip_safe = (clip.buffer(-via_d / 2.0, quad_segs=_CLIP_QUAD_SEGS)
-                 if conform else clip)
+    clip_safe = clip.buffer(-via_d / 2.0, quad_segs=_CLIP_QUAD_SEGS) if conform else clip
 
     def _inside(px: float, py: float) -> bool:
         return clip.covers(GeoPoint(px, py))
@@ -280,8 +274,9 @@ def build_trackpad(params: TrackpadParams) -> TrackpadGeometry:
         cy = y0 + (r + 0.5) * P
         # conform keeps every diamond (the clip decides what survives); inscribe
         # keeps only those whose centre is inside the mask.
-        kept = (set(range(C + 1)) if conform
-                else {c for c in range(C + 1) if _inside(x0 + c * P, cy)})
+        kept = (
+            set(range(C + 1)) if conform else {c for c in range(C + 1) if _inside(x0 + c * P, cy)}
+        )
         if not kept:
             raise TrackpadError(
                 f"Rx row {r + 1} lies entirely outside the {params.mask_shape} mask "
@@ -311,19 +306,29 @@ def build_trackpad(params: TrackpadParams) -> TrackpadGeometry:
                 f"Rx row {r + 1} lies entirely outside the {params.mask_shape} mask "
                 f"— use a larger radius or a more square matrix (num_rows ≈ num_cols)"
             )
-        full_area = unary_union(
-            [_diamond(x0 + c * P, cy, d) for c in range(C + 1)]
-            + [box(x0 + c * P + d - bw, cy - bw / 2.0,
-                   x0 + (c + 1) * P - d + bw, cy + bw / 2.0) for c in range(C)]
-        ).intersection(box_clip).area
-        nets.append(TrackpadNet(
-            pad_number=str(r + 1),
-            pin_name=f"Rx{r + 1}",
-            role="rx",
-            fcu=fcu,
-            anchor=anchor_point(max(fcu, key=lambda g: g.area)),
-            area_fraction=_fraction(fcu, full_area),
-        ))
+        full_area = (
+            unary_union(
+                [_diamond(x0 + c * P, cy, d) for c in range(C + 1)]
+                + [
+                    box(
+                        x0 + c * P + d - bw, cy - bw / 2.0, x0 + (c + 1) * P - d + bw, cy + bw / 2.0
+                    )
+                    for c in range(C)
+                ]
+            )
+            .intersection(box_clip)
+            .area
+        )
+        nets.append(
+            TrackpadNet(
+                pad_number=str(r + 1),
+                pin_name=f"Rx{r + 1}",
+                role="rx",
+                fcu=fcu,
+                anchor=anchor_point(max(fcu, key=lambda g: g.area)),
+                area_fraction=_fraction(fcu, full_area),
+            )
+        )
 
     # -- Tx columns: vertical, bridged on B.Cu (diamonds + straps + vias) -- #
     # Ordered left→right; pad numbers continue after the Rx rows.
@@ -365,8 +370,7 @@ def build_trackpad(params: TrackpadParams) -> TrackpadGeometry:
             fcu = [clipped[k] for k in sorted(kept)]
         else:
             fcu = _normalize(
-                unary_union([_diamond(cx, y0 + k * P, d) for k in sorted(kept)])
-                .intersection(clip),
+                unary_union([_diamond(cx, y0 + k * P, d) for k in sorted(kept)]).intersection(clip),
                 min_w,
             )
 
@@ -377,28 +381,34 @@ def build_trackpad(params: TrackpadParams) -> TrackpadGeometry:
             v_hi_y = y0 + (k + 1) * P - voff  # inside upper diamond, above its bottom vertex
             vias.append(Via((round(cx, ROUND), round(v_lo_y, ROUND))))
             vias.append(Via((round(cx, ROUND), round(v_hi_y, ROUND))))
-            straps.append(box(
-                cx - bw / 2.0, v_lo_y - via_d / 2.0,
-                cx + bw / 2.0, v_hi_y + via_d / 2.0,
-            ))
+            straps.append(
+                box(
+                    cx - bw / 2.0,
+                    v_lo_y - via_d / 2.0,
+                    cx + bw / 2.0,
+                    v_hi_y + via_d / 2.0,
+                )
+            )
         bcu = _normalize(unary_union(straps).intersection(clip), min_w) if straps else []
-        full_area = unary_union(
-            [_diamond(cx, y0 + k * P, d) for k in range(R + 1)]
-        ).intersection(box_clip).area
-        nets.append(TrackpadNet(
-            pad_number=str(R + c + 1),
-            pin_name=f"Tx{c + 1}",
-            role="tx",
-            fcu=fcu,
-            bcu=bcu,
-            vias=vias,
-            anchor=anchor_point(max(fcu, key=lambda g: g.area)),
-            area_fraction=_fraction(fcu, full_area),
-        ))
+        full_area = (
+            unary_union([_diamond(cx, y0 + k * P, d) for k in range(R + 1)])
+            .intersection(box_clip)
+            .area
+        )
+        nets.append(
+            TrackpadNet(
+                pad_number=str(R + c + 1),
+                pin_name=f"Tx{c + 1}",
+                role="tx",
+                fcu=fcu,
+                bcu=bcu,
+                vias=vias,
+                anchor=anchor_point(max(fcu, key=lambda g: g.area)),
+                area_fraction=_fraction(fcu, full_area),
+            )
+        )
 
-    all_copper = unary_union(
-        [g for n in nets for g in n.fcu] + [g for n in nets for g in n.bcu]
-    )
+    all_copper = unary_union([g for n in nets for g in n.fcu] + [g for n in nets for g in n.bcu])
     minx, miny, maxx, maxy = all_copper.bounds
     bounds = (round(minx, ROUND), round(miny, ROUND), round(maxx, ROUND), round(maxy, ROUND))
     return TrackpadGeometry(nets=nets, bounds=bounds, params=params)

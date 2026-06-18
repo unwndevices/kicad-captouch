@@ -43,20 +43,28 @@ SPIKE_POLYGON: list[tuple[float, float]] = [(-3, -3), (3, -3), (3, 3), (-3, 3)]
 # --------------------------------------------------------------------------- #
 def _add_fab_args(p: argparse.ArgumentParser) -> None:
     """Add the shared fab-rule flags to a widget subparser."""
-    p.add_argument("--fab-profile", choices=sorted(FAB_PROFILES), default=DEFAULT_PROFILE,
-                   help=f"fab-capability profile to check against (default: {DEFAULT_PROFILE})")
-    p.add_argument("--strict", action="store_true",
-                   help="treat fab-rule violations as a hard error (refuse to generate)")
-    p.add_argument("--list-fab-profiles", action="store_true",
-                   help="list fab profiles and exit")
+    p.add_argument(
+        "--fab-profile",
+        choices=sorted(FAB_PROFILES),
+        default=DEFAULT_PROFILE,
+        help=f"fab-capability profile to check against (default: {DEFAULT_PROFILE})",
+    )
+    p.add_argument(
+        "--strict",
+        action="store_true",
+        help="treat fab-rule violations as a hard error (refuse to generate)",
+    )
+    p.add_argument("--list-fab-profiles", action="store_true", help="list fab profiles and exit")
 
 
 def _list_fab_profiles() -> int:
     for key in sorted(FAB_PROFILES):
         r = FAB_PROFILES[key]
         print(f"{key:9} {r.description}")
-        print(f"          track {r.min_track_width} clearance {r.min_clearance} "
-              f"drill {r.min_drill} annular {r.min_annular_ring} mm")
+        print(
+            f"          track {r.min_track_width} clearance {r.min_clearance} "
+            f"drill {r.min_drill} annular {r.min_annular_ring} mm"
+        )
     return 0
 
 
@@ -66,13 +74,17 @@ def _report_fab(violations, profile_key: str, *, strict: bool) -> None:
         return
     rules = FAB_PROFILES[profile_key]
     head = "error" if strict else "warning"
-    print(f"{head}: {len(violations)} fab-rule issue(s) vs the '{rules.name}' profile "
-          f"({rules.description}):")
+    print(
+        f"{head}: {len(violations)} fab-rule issue(s) vs the '{rules.name}' profile "
+        f"({rules.description}):"
+    )
     for v in violations:
         print(f"  - {v.message}")
     if strict:
-        print("  refusing to generate under --strict — relax the geometry, pick a "
-              "finer --fab-profile, or drop --strict")
+        print(
+            "  refusing to generate under --strict — relax the geometry, pick a "
+            "finer --fab-profile, or drop --strict"
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -147,14 +159,22 @@ def _slider(args: argparse.Namespace) -> int:
 
 def _add_slider_parser(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("slider", help="generate a linear slider footprint + symbol")
-    p.add_argument("-o", "--out", type=Path, default=Path("examples"),
-                   help="output directory (default: ./examples)")
+    p.add_argument(
+        "-o",
+        "--out",
+        type=Path,
+        default=Path("examples"),
+        help="output directory (default: ./examples)",
+    )
     p.add_argument("--list-presets", action="store_true", help="list presets and exit")
     p.add_argument("--preset", choices=sorted(SLIDER_PRESETS), help="start from a vendor preset")
     p.add_argument("--name", help="footprint/symbol base name")
-    p.add_argument("--shape", dest="shape",
-                   choices=("rectangular", "chevron", "interdigitated"),
-                   help="electrode edge style")
+    p.add_argument(
+        "--shape",
+        dest="shape",
+        choices=("rectangular", "chevron", "interdigitated"),
+        help="electrode edge style",
+    )
     p.add_argument("--num-segments", type=int, help="active electrode count (>=3)")
     p.add_argument("--segment-width", type=float, help="segment width W (mm; derived if unset)")
     p.add_argument("--segment-height", type=float, help="segment height H (mm)")
@@ -165,8 +185,9 @@ def _add_slider_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--end-dummies", type=int, help="grounded dummy segments per end (0-2)")
     p.add_argument("--corner-radius", type=float, help="extra ESD convex-corner rounding (mm)")
     p.add_argument("--tip-radius", type=float, help="chevron tooth-tip rounding (mm)")
-    p.add_argument("--relax-finger-constraint", action="store_true",
-                   help="skip the W+2A=finger check")
+    p.add_argument(
+        "--relax-finger-constraint", action="store_true", help="skip the W+2A=finger check"
+    )
     _add_fab_args(p)
     p.set_defaults(func=_slider)
 
@@ -242,16 +263,26 @@ def _wheel(args: argparse.Namespace) -> int:
 
 def _add_wheel_parser(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("wheel", help="generate a rotary wheel footprint + symbol")
-    p.add_argument("-o", "--out", type=Path, default=Path("examples"),
-                   help="output directory (default: ./examples)")
+    p.add_argument(
+        "-o",
+        "--out",
+        type=Path,
+        default=Path("examples"),
+        help="output directory (default: ./examples)",
+    )
     p.add_argument("--list-presets", action="store_true", help="list presets and exit")
     p.add_argument("--preset", choices=sorted(WHEEL_PRESETS), help="start from a vendor preset")
     p.add_argument("--name", help="footprint/symbol base name")
-    p.add_argument("--shape", dest="shape",
-                   choices=("rectangular", "chevron", "interdigitated"),
-                   help="electrode boundary style")
+    p.add_argument(
+        "--shape",
+        dest="shape",
+        choices=("rectangular", "chevron", "interdigitated"),
+        help="electrode boundary style",
+    )
     p.add_argument("--num-segments", type=int, help="electrode count around the ring (>=3)")
-    p.add_argument("--segment-width", type=float, help="arc width W at mean radius (mm; derived if unset)")
+    p.add_argument(
+        "--segment-width", type=float, help="arc width W at mean radius (mm; derived if unset)"
+    )
     p.add_argument("--ring-width", type=float, help="radial ring width (mm)")
     p.add_argument("--air-gap", type=float, help="inter-electrode gap A (mm)")
     p.add_argument("--finger-diameter", type=float, help="finger contact diameter (mm)")
@@ -260,8 +291,9 @@ def _add_wheel_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--corner-radius", type=float, help="extra ESD convex-corner rounding (mm)")
     p.add_argument("--tip-radius", type=float, help="chevron tooth-tip rounding (mm)")
     p.add_argument("--arc-resolution", type=int, help="circle tessellation: segments per 90deg")
-    p.add_argument("--relax-finger-constraint", action="store_true",
-                   help="skip the W+2A=finger check")
+    p.add_argument(
+        "--relax-finger-constraint", action="store_true", help="skip the W+2A=finger check"
+    )
     _add_fab_args(p)
     p.set_defaults(func=_wheel)
 
@@ -353,9 +385,16 @@ def _report_partial_channels(geo) -> None:
 
 
 def _add_trackpad_parser(sub: argparse._SubParsersAction) -> None:
-    p = sub.add_parser("trackpad", help="generate a mutual-cap XY diamond trackpad footprint + symbol")
-    p.add_argument("-o", "--out", type=Path, default=Path("examples"),
-                   help="output directory (default: ./examples)")
+    p = sub.add_parser(
+        "trackpad", help="generate a mutual-cap XY diamond trackpad footprint + symbol"
+    )
+    p.add_argument(
+        "-o",
+        "--out",
+        type=Path,
+        default=Path("examples"),
+        help="output directory (default: ./examples)",
+    )
     p.add_argument("--list-presets", action="store_true", help="list presets and exit")
     p.add_argument("--preset", choices=sorted(TRACKPAD_PRESETS), help="start from a vendor preset")
     p.add_argument("--name", help="footprint/symbol base name")
@@ -366,16 +405,26 @@ def _add_trackpad_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--bridge-width", type=float, help="F.Cu neck / B.Cu strap width (mm)")
     p.add_argument("--via-drill", type=float, help="bridge via finished hole diameter (mm)")
     p.add_argument("--via-diameter", type=float, help="bridge via outer copper diameter (mm)")
-    p.add_argument("--mask-shape", choices=MASK_SHAPES,
-                   help="outer outline: rect (default), rrect, or circle")
-    p.add_argument("--clip-mode", choices=CLIP_MODES,
-                   help="curved-mask diamonds: inscribe (default, kept whole or "
-                        "dropped) or conform (cut to the curve, Azoteq Fig 6.3)")
-    p.add_argument("--corner-radius", type=float,
-                   help="rounded-rect fillet radius (mm; with --mask-shape rrect)")
-    p.add_argument("--radius", type=float,
-                   help="circle mask radius (mm; with --mask-shape circle; "
-                        "default = inscribed 0.5·min(width,height))")
+    p.add_argument(
+        "--mask-shape", choices=MASK_SHAPES, help="outer outline: rect (default), rrect, or circle"
+    )
+    p.add_argument(
+        "--clip-mode",
+        choices=CLIP_MODES,
+        help="curved-mask diamonds: inscribe (default, kept whole or "
+        "dropped) or conform (cut to the curve, Azoteq Fig 6.3)",
+    )
+    p.add_argument(
+        "--corner-radius",
+        type=float,
+        help="rounded-rect fillet radius (mm; with --mask-shape rrect)",
+    )
+    p.add_argument(
+        "--radius",
+        type=float,
+        help="circle mask radius (mm; with --mask-shape circle; "
+        "default = inscribed 0.5·min(width,height))",
+    )
     _add_fab_args(p)
     p.set_defaults(func=_trackpad)
 
@@ -408,8 +457,11 @@ def _gui(args: argparse.Namespace) -> int:
 
 def _add_gui_parser(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("gui", help="launch the live-preview desktop app")
-    p.add_argument("--check", action="store_true",
-                   help="construct the GUI and exit (smoke test; no window loop)")
+    p.add_argument(
+        "--check",
+        action="store_true",
+        help="construct the GUI and exit (smoke test; no window loop)",
+    )
     p.set_defaults(func=_gui)
 
 
@@ -429,8 +481,13 @@ def _spike(args: argparse.Namespace) -> int:
 
 def _add_spike_parser(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("spike", help="emit the Phase-0 format-spike pair")
-    p.add_argument("-o", "--out", type=Path, default=Path("examples"),
-                   help="output directory (default: ./examples)")
+    p.add_argument(
+        "-o",
+        "--out",
+        type=Path,
+        default=Path("examples"),
+        help="output directory (default: ./examples)",
+    )
     p.set_defaults(func=_spike)
 
 

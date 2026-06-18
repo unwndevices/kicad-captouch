@@ -47,8 +47,11 @@ def test_pad_count_matches_geometry(rows, cols):
 def test_vias_are_thru_hole_with_drill(rows, cols):
     geo = build_trackpad(TrackpadParams(num_rows=rows, num_cols=cols))
     pads = _pads(footprint.trackpad_footprint(geo))
-    vias = [p for p in pads if any(isinstance(c, sexpr.Sym) and c.name == "thru_hole"
-                                   for c in sexpr.children(p))]
+    vias = [
+        p
+        for p in pads
+        if any(isinstance(c, sexpr.Sym) and c.name == "thru_hole" for c in sexpr.children(p))
+    ]
     assert len(vias) == sum(len(n.vias) for n in geo.nets)
     for v in vias:
         assert sexpr.find(v, "drill") is not None
@@ -90,8 +93,9 @@ def test_footprint_uses_rect_outline():
 
 def test_rrect_mask_shapes_fab_and_courtyard():
     # rrect mask → F.Fab and F.CrtYd are both polyline fp_polys; no rect outline.
-    geo = build_trackpad(TrackpadParams(num_rows=4, num_cols=4,
-                                        mask_shape="rrect", corner_radius=2.0))
+    geo = build_trackpad(
+        TrackpadParams(num_rows=4, num_cols=4, mask_shape="rrect", corner_radius=2.0)
+    )
     fp_node = footprint.trackpad_footprint(geo)
     poly_layers = sorted(sexpr.find(p, "layer")[1] for p in sexpr.find_all(fp_node, "fp_poly"))
     assert poly_layers == ["F.CrtYd", "F.Fab"]
@@ -125,8 +129,7 @@ def test_version_tokens():
 @pytest.mark.parametrize("rows,cols", SIZES)
 def test_emitted_text_round_trips(rows, cols):
     geo = build_trackpad(TrackpadParams(num_rows=rows, num_cols=cols))
-    for text in (footprint.trackpad_footprint_text(geo),
-                 symbol.trackpad_symbol_lib_text(geo)):
+    for text in (footprint.trackpad_footprint_text(geo), symbol.trackpad_symbol_lib_text(geo)):
         assert sexpr.dumps(sexpr.loads(text)) + "\n" == text
 
 
@@ -142,10 +145,12 @@ def test_golden_symbol():
 
 # Outline-only goldens: same 3x3 matrix/copper as the rect baseline, differing
 # only in the F.Fab mask outline (Stage A — copper is not yet clipped).
-GOLDEN_RRECT_PARAMS = TrackpadParams(name="CT_Trackpad_3x3_RRect", num_rows=3,
-                                     num_cols=3, mask_shape="rrect", corner_radius=2.0)
-GOLDEN_CIRCLE_PARAMS = TrackpadParams(name="CT_Trackpad_3x3_Circle", num_rows=3,
-                                      num_cols=3, mask_shape="circle")
+GOLDEN_RRECT_PARAMS = TrackpadParams(
+    name="CT_Trackpad_3x3_RRect", num_rows=3, num_cols=3, mask_shape="rrect", corner_radius=2.0
+)
+GOLDEN_CIRCLE_PARAMS = TrackpadParams(
+    name="CT_Trackpad_3x3_Circle", num_rows=3, num_cols=3, mask_shape="circle"
+)
 
 
 def test_golden_rrect_footprint():
@@ -158,15 +163,21 @@ def test_golden_circle_footprint():
     assert text == (GOLDEN / "CT_Trackpad_3x3_Circle.kicad_mod").read_text()
 
 
-@pytest.mark.parametrize("kw", [
-    {"mask_shape": "rrect", "corner_radius": 2.0}, {"mask_shape": "circle"},
-])
+@pytest.mark.parametrize(
+    "kw",
+    [
+        {"mask_shape": "rrect", "corner_radius": 2.0},
+        {"mask_shape": "circle"},
+    ],
+)
 def test_mask_does_not_change_symbol(kw):
     # The mask shapes only documentation/copper outline, never pin topology, so a
     # given matrix emits the same symbol regardless of mask_shape (no sym golden
     # needed per shape).
-    rect = symbol.trackpad_symbol_lib_text(build_trackpad(
-        TrackpadParams(name="T", num_rows=3, num_cols=3)))
-    masked = symbol.trackpad_symbol_lib_text(build_trackpad(
-        TrackpadParams(name="T", num_rows=3, num_cols=3, **kw)))
+    rect = symbol.trackpad_symbol_lib_text(
+        build_trackpad(TrackpadParams(name="T", num_rows=3, num_cols=3))
+    )
+    masked = symbol.trackpad_symbol_lib_text(
+        build_trackpad(TrackpadParams(name="T", num_rows=3, num_cols=3, **kw))
+    )
     assert masked == rect

@@ -129,7 +129,9 @@ class ParamPanel(PanelBase):
         return SliderParams(
             num_segments=self.num_segments.value(),
             segment_shape=self.shape.currentText(),
-            segment_width=None if self.segment_width_auto.isChecked() else self.segment_width.value(),
+            segment_width=None
+            if self.segment_width_auto.isChecked()
+            else self.segment_width.value(),
             segment_height=self.segment_height.value(),
             air_gap=self.air_gap.value(),
             finger_diameter=self.finger_diameter.value(),

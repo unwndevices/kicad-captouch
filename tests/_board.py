@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from captouch import sexpr
 from captouch.export import footprint
+from captouch.geometry import TrackpadGeometry
 from captouch.sexpr import Sym
 
 # Canonical KiCad layer table (the subset a board must declare).
@@ -45,10 +46,17 @@ def _layers() -> list:
     return out
 
 
-def _embed(fp_node: list, at: tuple[float, float]) -> list:
-    """Adapt a standalone footprint node for embedding in a board."""
+def _embed(fp_node: list, at: tuple[float, float], net_of: dict | None = None) -> list:
+    """Adapt a standalone footprint node for embedding in a board.
+
+    If *net_of* (``{pad_number: (index, name)}``) is given, each pad is stamped
+    with its ``(net …)`` so DRC checks clearance/connectivity per real net rather
+    than treating all copper as one netless blob.
+    """
     drop = ("version", "generator", "generator_version", "layer")
     body = [c for c in fp_node[2:] if not (isinstance(c, list) and sexpr.head(c) in drop)]
+    if net_of:
+        body = [_stamp_net(c, net_of) if sexpr.head(c) == "pad" else c for c in body]
     return [
         Sym("footprint"),
         fp_node[1],
@@ -57,6 +65,21 @@ def _embed(fp_node: list, at: tuple[float, float]) -> list:
         [Sym("at"), at[0], at[1]],
         *body,
     ]
+
+
+def _stamp_net(pad: list, net_of: dict) -> list:
+    """Append a ``(net index name)`` child to *pad* from its pad number."""
+    number = sexpr.children(pad)[0]
+    entry = net_of.get(number)
+    if entry is None:
+        return pad
+    index, name = entry
+    return [*pad, [Sym("net"), index, name]]
+
+
+def trackpad_net_map(geo: TrackpadGeometry) -> dict:
+    """``{pad_number: (net_index, net_name)}`` — one distinct net per Rx/Tx line."""
+    return {n.pad_number: (i + 1, n.pin_name) for i, n in enumerate(geo.nets)}
 
 
 def _edge_cuts(geo, at: tuple[float, float], margin: float) -> list:
@@ -74,10 +97,30 @@ def _edge_cuts(geo, at: tuple[float, float], margin: float) -> list:
 
 
 def widget_board_text(
-    geo, *, at: tuple[float, float] = (100.0, 100.0), margin: float = 8.0
+    geo,
+    *,
+    at: tuple[float, float] = (100.0, 100.0),
+    margin: float = 8.0,
+    nets: dict | None = None,
 ) -> str:
-    """Serialise a minimal board with the widget placed and a board outline."""
-    fp = _embed(footprint.widget_footprint(geo), at)
+    """Serialise a minimal board with the widget placed and a board outline.
+
+    *nets* (``{pad_number: (index, name)}``, e.g. from :func:`trackpad_net_map`)
+    assigns a real net per pad number so DRC genuinely checks inter-net clearance
+    and cross-layer connectivity. Omitted (slider/wheel) → all copper is netless,
+    which KiCad still clearance-checks.
+    """
+    if isinstance(geo, TrackpadGeometry):
+        fp_node = footprint.trackpad_footprint(geo)
+    else:
+        fp_node = footprint.widget_footprint(geo)
+    fp = _embed(fp_node, at, nets)
+
+    net_decls = [[Sym("net"), 0, ""]]
+    if nets:
+        for index, name in sorted(set(nets.values())):
+            net_decls.append([Sym("net"), index, name])
+
     board = [
         Sym("kicad_pcb"),
         [Sym("version"), footprint.FOOTPRINT_VERSION],
@@ -87,7 +130,7 @@ def widget_board_text(
         [Sym("paper"), "A4"],
         _layers(),
         [Sym("setup")],
-        [Sym("net"), 0, ""],
+        *net_decls,
         _edge_cuts(geo, at, margin),
         fp,
     ]

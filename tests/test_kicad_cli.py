@@ -13,10 +13,10 @@ import subprocess
 import pytest
 
 from captouch.export import footprint, symbol
-from captouch.geometry import build_slider, build_wheel
-from captouch.params import SliderParams, WheelParams
+from captouch.geometry import build_slider, build_trackpad, build_wheel
+from captouch.params import SliderParams, TrackpadParams, WheelParams
 
-from _board import widget_board_text
+from _board import trackpad_net_map, widget_board_text
 
 KICAD_CLI = shutil.which("kicad-cli")
 pytestmark = pytest.mark.skipif(KICAD_CLI is None, reason="kicad-cli not installed")
@@ -135,3 +135,58 @@ def test_wheel_sharp_chevron_tips_sliver(tmp_path):
     report = _drc(board, tmp_path / "sharp.json")
     slivers = [v for v in report["violations"] if v["type"] == "copper_sliver"]
     assert slivers, "expected copper slivers for un-rounded chevron tips"
+
+
+# --------------------------------------------------------------------------- #
+# trackpad (two-layer diamond matrix with via bridges)
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("rows,cols", [(3, 3), (4, 5), (5, 5)])
+def test_trackpad_drc_clean(rows, cols, tmp_path):
+    # Real nets are assigned per Rx/Tx line, so this checks BOTH inter-net
+    # clearance (Rx vs Tx copper, vias vs copper) AND connectivity: an empty
+    # `unconnected_items` proves the via bridges actually join each Tx column
+    # across the two layers (with nets unassigned the check would be vacuous).
+    geo = build_trackpad(TrackpadParams(name="CT_Trackpad", num_rows=rows, num_cols=cols))
+    board = tmp_path / "board.kicad_pcb"
+    board.write_text(widget_board_text(geo, nets=trackpad_net_map(geo)))
+    report = _drc(board, tmp_path / "drc.json")
+    assert report["violations"] == [], report["violations"]
+    assert report["unconnected_items"] == [], report["unconnected_items"]
+
+
+def test_trackpad_footprint_renders(tmp_path):
+    geo = build_trackpad(TrackpadParams(name="CT_Trackpad", num_rows=4, num_cols=5))
+    pretty = tmp_path / "lib.pretty"
+    pretty.mkdir()
+    (pretty / "CT_Trackpad.kicad_mod").write_text(footprint.trackpad_footprint_text(geo))
+    svg_dir = tmp_path / "svg"
+    svg_dir.mkdir()
+    proc = _run("fp", "export", "svg", "--footprint", "CT_Trackpad",
+                "--output", str(svg_dir), str(pretty))
+    assert proc.returncode == 0 and "Error" not in proc.stdout, proc.stdout + proc.stderr
+    assert (svg_dir / "CT_Trackpad.svg").exists()
+
+
+def test_trackpad_drc_catches_undersized_gap(tmp_path):
+    # Negative control: shrinking the gap (and neck) below the fab clearance MUST
+    # be flagged — proving Rx and Tx sit on distinct nets and the gate is real.
+    geo = build_trackpad(TrackpadParams(name="TinyGap", num_rows=3, num_cols=3,
+                                        diamond_gap=0.12, bridge_width=0.08))
+    board = tmp_path / "tiny.kicad_pcb"
+    board.write_text(widget_board_text(geo, nets=trackpad_net_map(geo)))
+    report = _drc(board, tmp_path / "tiny.json")
+    clearances = [v for v in report["violations"] if v["type"] == "clearance"]
+    assert clearances, "expected clearance violations for a 0.12 mm diamond gap"
+
+
+def test_trackpad_bridges_required_for_connectivity(tmp_path):
+    # Negative control for the bridge itself: drop the vias/straps and the Tx
+    # columns fall apart into disconnected F.Cu diamonds → unconnected items.
+    from dataclasses import replace as _replace
+
+    geo = build_trackpad(TrackpadParams(name="NoBridge", num_rows=3, num_cols=3))
+    stripped = _replace(geo, nets=[_replace(n, bcu=[], vias=[]) for n in geo.nets])
+    board = tmp_path / "nobridge.kicad_pcb"
+    board.write_text(widget_board_text(stripped, nets=trackpad_net_map(stripped)))
+    report = _drc(board, tmp_path / "nobridge.json")
+    assert report["unconnected_items"], "expected unconnected Tx diamonds without bridges"

@@ -17,7 +17,9 @@ from . import __version__
 from .export import footprint, symbol
 from .geometry import build_slider, build_trackpad, build_wheel
 from .params import (
+    CLIP_MODES,
     DEFAULT_PROFILE,
+    DISABLE_AREA_FRACTION,
     FAB_PROFILES,
     MASK_SHAPES,
     SLIDER_PRESETS,
@@ -282,6 +284,7 @@ def _trackpad_params_from_args(args: argparse.Namespace) -> TrackpadParams:
         ("via_drill", "via_drill"),
         ("via_diameter", "via_diameter"),
         ("mask_shape", "mask_shape"),
+        ("clip_mode", "clip_mode"),
         ("corner_radius", "corner_radius"),
         ("radius", "radius"),
     ):
@@ -330,8 +333,23 @@ def _trackpad(args: argparse.Namespace) -> int:
         f"pitch={params.diamond_pitch:.2f} gap={params.diamond_gap:.2f} mm, "
         f"extent {params.width:.2f} x {params.height:.2f} mm"
     )
+    _report_partial_channels(geo)
     _report_fab(violations, args.fab_profile, strict=False)
     return 0
+
+
+def _report_partial_channels(geo) -> None:
+    """Warn about channels a curved mask shrinks below the disable threshold."""
+    partials = geo.partial_channels()
+    if not partials:
+        return
+    pct = int(round(DISABLE_AREA_FRACTION * 100))
+    print(
+        f"  {len(partials)} partial channel(s) under {pct}% of full electrode area "
+        f"(Azoteq AZD068 §6 — consider disabling these in firmware):"
+    )
+    for name, frac in partials:
+        print(f"    - {name}: {frac * 100:.0f}% area remaining")
 
 
 def _add_trackpad_parser(sub: argparse._SubParsersAction) -> None:
@@ -350,6 +368,9 @@ def _add_trackpad_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--via-diameter", type=float, help="bridge via outer copper diameter (mm)")
     p.add_argument("--mask-shape", choices=MASK_SHAPES,
                    help="outer outline: rect (default), rrect, or circle")
+    p.add_argument("--clip-mode", choices=CLIP_MODES,
+                   help="curved-mask diamonds: inscribe (default, kept whole or "
+                        "dropped) or conform (cut to the curve, Azoteq Fig 6.3)")
     p.add_argument("--corner-radius", type=float,
                    help="rounded-rect fillet radius (mm; with --mask-shape rrect)")
     p.add_argument("--radius", type=float,

@@ -79,6 +79,17 @@ def test_trackpad_rrect_mask_writes_poly_outline(tmp_path):
     assert "(fp_poly" in (tmp_path / "T.kicad_mod").read_text()  # F.Fab polyline
 
 
+def test_trackpad_conform_circle_reports_partial_channels(tmp_path, capsys):
+    rc = main(["trackpad", "--out", str(tmp_path), "--name", "T",
+               "--num-rows", "7", "--num-cols", "7",
+               "--mask-shape", "circle", "--clip-mode", "conform"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "partial channel" in out
+    assert "Rx1" in out and "disabling" in out
+    assert (tmp_path / "T.kicad_mod").exists()
+
+
 def test_trackpad_corner_radius_without_rrect_errors(tmp_path, capsys):
     rc = main(["trackpad", "--out", str(tmp_path), "--name", "T", "--corner-radius", "2"])
     assert rc == 2  # SliderError path; nothing written
@@ -95,7 +106,7 @@ def test_trackpad_min_feature_tracks_fab_profile():
     unset = dict(preset=None, name=None, num_rows=None, num_cols=None,
                  diamond_pitch=None, diamond_gap=None, bridge_width=None,
                  via_drill=None, via_diameter=None, mask_shape=None,
-                 corner_radius=None, radius=None)
+                 clip_mode=None, corner_radius=None, radius=None)
     for prof in ("default", "jlcpcb", "oshpark"):
         p = _trackpad_params_from_args(Namespace(fab_profile=prof, **unset))
         assert p.min_feature == FAB_PROFILES[prof].min_track_width

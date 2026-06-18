@@ -92,6 +92,8 @@ Wheels are continuous, so there are no end dummies.
 
 ```sh
 captouch trackpad --preset infineon --num-rows 6 --num-cols 6
+captouch trackpad --num-rows 6 --num-cols 6 --mask-shape circle
+captouch trackpad --mask-shape rrect --corner-radius 4
 ```
 
 Trackpad-specific: `--num-rows` (Rx) × `--num-cols` (Tx), each 3–16 (≤100 nodes);
@@ -100,6 +102,20 @@ Trackpad-specific: `--num-rows` (Rx) × `--num-cols` (Tx), each 3–16 (≤100 n
 bridged on **B.Cu**, so the design needs two copper layers. The connecting necks
 pinch tighter than the bulk diamond gap (~`gap/√2`) — that pinch is what the fab
 guard and the DRC gate watch.
+
+**Mask shape.** `--mask-shape {rect,rrect,circle}` sets the pad's outer outline
+(default `rect`):
+
+- `rrect` rounds the corners by `--corner-radius` (mm); works at any matrix size.
+- `circle` clips the matrix to a disk of `--radius` (mm; default the inscribed
+  `0.5·min(width,height)`). A diamond is kept only when its **centre** is inside
+  the mask, so every surviving node stays bridgeable and DRC-clean — the corner
+  nodes are dropped, exactly as vendors do for round trackpads (their firmware
+  treats the rim as partial/phantom nodes). A circle therefore needs a roughly
+  **square** matrix (`num_rows ≈ num_cols`); an elongated one whose outer column
+  the disk can't reach is rejected with an error pointing you at a larger radius
+  or a squarer matrix. The mask shapes the copper, the `F.Fab` outline, and the
+  courtyard; it never changes the `Rx`/`Tx` pin count or numbering.
 
 ## Fab-rule guards
 
@@ -152,6 +168,9 @@ captouch gui            # or: captouch-gui
 
 - A **Widget** selector swaps the slider / wheel / trackpad parameter panel.
 - A **Preset** menu loads vendor starting points into the form.
+- The trackpad panel has a **Mask** group — shape (rect / rrect / circle) with a
+  corner-radius (rrect) or radius (circle; *Auto* = inscribed) control — that
+  reshapes the live preview.
 - The **preview** renders the *same* geometry the exporters serialise (WYSIWYG),
   with zoom/pan, **Fit**, and per-layer toggles (incl. `F.Cu`, `B.Cu`, and vias
   for the trackpad).

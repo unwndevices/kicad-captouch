@@ -214,6 +214,59 @@ def _header(name: str, value: str, ref_at: float, val_at: float) -> list:
 
 
 # --------------------------------------------------------------------------- #
+# Emit-time structural validation
+# --------------------------------------------------------------------------- #
+class FootprintError(ValueError):
+    """Raised when an assembled footprint node is structurally malformed."""
+
+
+def _validate_pad(pad: list) -> None:
+    kids = sexpr.children(pad)
+    num = kids[0] if kids else None
+    if not isinstance(num, str) or not num:
+        raise FootprintError(f"pad needs a string number, got {num!r}")
+    for token in ("at", "layers"):
+        if sexpr.find(pad, token) is None:
+            raise FootprintError(f"pad {num!r} missing ({token} …)")
+    # A custom (polygon) pad must carry a polygon of at least 3 points.
+    prims = sexpr.find(pad, "primitives")
+    if prims is not None:
+        gr_poly = sexpr.find(prims, "gr_poly")
+        pts = sexpr.find(gr_poly, "pts") if gr_poly is not None else None
+        n = len(sexpr.find_all(pts, "xy")) if pts is not None else 0
+        if n < 3:
+            raise FootprintError(f"pad {num!r} polygon has {n} point(s), need >= 3")
+
+
+def validate_footprint(node: list) -> list:
+    """Check *node* is a well-formed footprint before serialisation.
+
+    A guard against emitter bugs: rather than write a malformed ``.kicad_mod``
+    that only fails when KiCad opens it, fail loudly here. Returns *node*
+    unchanged so it can be used inline.
+    """
+    if sexpr.head(node) != "footprint":
+        raise FootprintError(f"footprint must start with 'footprint', got {sexpr.head(node)!r}")
+    kids = sexpr.children(node)
+    if not kids or not isinstance(kids[0], str) or not kids[0]:
+        raise FootprintError("footprint needs a non-empty name as its first element")
+    for token in ("version", "generator"):
+        if sexpr.find(node, token) is None:
+            raise FootprintError(f"footprint missing ({token} …)")
+    pads = sexpr.find_all(node, "pad")
+    if not pads:
+        raise FootprintError("footprint has no pads")
+    for pad in pads:
+        _validate_pad(pad)
+    return node
+
+
+def _serialize_footprint(node: list) -> str:
+    """Validate then serialise a footprint node to text (trailing newline)."""
+    return sexpr.dumps(validate_footprint(node)) + "\n"
+
+
+# --------------------------------------------------------------------------- #
 # Phase 0 spike: a single electrode from one polygon (kept for the format gate)
 # --------------------------------------------------------------------------- #
 def electrode_footprint(name: str, polygon: Sequence[Point], *, value: str | None = None) -> list:
@@ -229,7 +282,7 @@ def electrode_footprint(name: str, polygon: Sequence[Point], *, value: str | Non
 
 def footprint_text(name: str, polygon: Sequence[Point], *, value: str | None = None) -> str:
     """Serialise an electrode footprint to `.kicad_mod` text (trailing newline)."""
-    return sexpr.dumps(electrode_footprint(name, polygon, value=value)) + "\n"
+    return _serialize_footprint(electrode_footprint(name, polygon, value=value))
 
 
 # --------------------------------------------------------------------------- #
@@ -269,7 +322,7 @@ def widget_footprint(geo: ElectrodeGeometry) -> list:
 
 def widget_footprint_text(geo: ElectrodeGeometry) -> str:
     """Serialise any widget footprint to `.kicad_mod` text (trailing newline)."""
-    return sexpr.dumps(widget_footprint(geo)) + "\n"
+    return _serialize_footprint(widget_footprint(geo))
 
 
 # Backwards-compatible / explicit per-widget aliases.
@@ -346,4 +399,4 @@ def trackpad_footprint(geo: TrackpadGeometry) -> list:
 
 def trackpad_footprint_text(geo: TrackpadGeometry) -> str:
     """Serialise a trackpad footprint to `.kicad_mod` text (trailing newline)."""
-    return sexpr.dumps(trackpad_footprint(geo)) + "\n"
+    return _serialize_footprint(trackpad_footprint(geo))

@@ -122,6 +122,53 @@ def _lib(*symbols: list) -> list:
 
 
 # --------------------------------------------------------------------------- #
+# Emit-time structural validation
+# --------------------------------------------------------------------------- #
+class SymbolError(ValueError):
+    """Raised when an assembled symbol-library node is structurally malformed."""
+
+
+def _collect(node: list, name: str) -> list:
+    """All descendant nodes (any depth) whose head is *name*."""
+    out: list = []
+    for c in sexpr.children(node):
+        if isinstance(c, list):
+            if sexpr.head(c) == name:
+                out.append(c)
+            out.extend(_collect(c, name))
+    return out
+
+
+def validate_symbol_lib(node: list) -> list:
+    """Check *node* is a well-formed symbol library before serialisation.
+
+    Guards against emitter bugs (see :func:`footprint.validate_footprint`).
+    Returns *node* unchanged so it can be used inline.
+    """
+    if sexpr.head(node) != "kicad_symbol_lib":
+        raise SymbolError(
+            f"symbol lib must start with 'kicad_symbol_lib', got {sexpr.head(node)!r}"
+        )
+    for token in ("version", "generator"):
+        if sexpr.find(node, token) is None:
+            raise SymbolError(f"symbol lib missing ({token} …)")
+    if not sexpr.find_all(node, "symbol"):
+        raise SymbolError("symbol lib has no symbols")
+    pins = _collect(node, "pin")
+    if not pins:
+        raise SymbolError("symbol lib has no pins")
+    for pin in pins:
+        if sexpr.find(pin, "name") is None or sexpr.find(pin, "number") is None:
+            raise SymbolError("pin missing (name …) / (number …)")
+    return node
+
+
+def _serialize_symbol_lib(node: list) -> str:
+    """Validate then serialise a symbol-library node to text (trailing newline)."""
+    return sexpr.dumps(validate_symbol_lib(node)) + "\n"
+
+
+# --------------------------------------------------------------------------- #
 # Phase 0 spike: a single one-pin symbol (kept for the format gate)
 # --------------------------------------------------------------------------- #
 def one_pin_symbol(name: str) -> list:
@@ -160,7 +207,7 @@ def symbol_lib(name: str) -> list:
 
 def symbol_lib_text(name: str) -> str:
     """Serialise a one-symbol library to `.kicad_sym` text (trailing newline)."""
-    return sexpr.dumps(symbol_lib(name)) + "\n"
+    return _serialize_symbol_lib(symbol_lib(name))
 
 
 # --------------------------------------------------------------------------- #
@@ -183,7 +230,7 @@ def widget_symbol_lib(geo: WidgetGeometry) -> list:
 
 def widget_symbol_lib_text(geo: WidgetGeometry) -> str:
     """Serialise a widget symbol library to `.kicad_sym` text (trailing newline)."""
-    return sexpr.dumps(widget_symbol_lib(geo)) + "\n"
+    return _serialize_symbol_lib(widget_symbol_lib(geo))
 
 
 # Backwards-compatible / explicit per-widget aliases.

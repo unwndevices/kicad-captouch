@@ -12,6 +12,7 @@ from __future__ import annotations
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDoubleSpinBox,
     QFormLayout,
     QGroupBox,
@@ -32,6 +33,14 @@ class PanelBase(QWidget):
     """Base parameter panel: a ``changed`` signal plus widget factories."""
 
     changed = Signal()
+
+    # Teeth controls owned by the slider / wheel subclasses (used by `_on_shape`).
+    # Annotation-only: declared for the type checker, never set on PanelBase itself,
+    # so the trackpad subclass (which has no teeth) is unaffected at runtime.
+    shape: QComboBox
+    num_fingers: QSpinBox
+    tooth_depth: QDoubleSpinBox
+    tooth_depth_auto: QCheckBox
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -129,8 +138,14 @@ class PanelBase(QWidget):
         for w in (self.ground_margin, self.ground_hatch_width, self.ground_hatch_pitch):
             w.setEnabled(ground)
         guard = self.guard_ring.isChecked()
-        for w in (self.guard_width, self.guard_gap, self.guard_break, self.guard_mask_open):
-            w.setEnabled(guard)
+        guard_ctrls: tuple[QWidget, ...] = (
+            self.guard_width,
+            self.guard_gap,
+            self.guard_break,
+            self.guard_mask_open,
+        )
+        for gw in guard_ctrls:
+            gw.setEnabled(guard)
 
     def _support_kwargs(self) -> dict:
         """The support-copper field overrides to splice into a panel's ``params()``."""

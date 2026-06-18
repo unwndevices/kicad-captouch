@@ -159,13 +159,13 @@ class PreviewView(QGraphicsView):
         """Vertices actually drawn for an electrode — for WYSIWYG verification."""
         item = self._electrode_items[pad_number]
         poly = item.polygon()
-        return [(round(p.x(), 4), round(p.y(), 4)) for p in poly]
+        return [(round(p.x(), 4), round(p.y(), 4)) for p in poly.toList()]
 
     def net_polygon_points(self, pad_number: str) -> list[list[tuple[float, float]]]:
         """Vertices drawn for every copper piece of a trackpad net (WYSIWYG check)."""
         out = []
         for item in self._net_items[pad_number]:
-            out.append([(round(p.x(), 4), round(p.y(), 4)) for p in item.polygon()])
+            out.append([(round(p.x(), 4), round(p.y(), 4)) for p in item.polygon().toList()])
         return out
 
     def fit(self) -> None:

@@ -197,7 +197,8 @@ def _largest_component(nodes: set[int], edges: list[tuple[int, int]]) -> set[int
     for n in nodes:
         groups.setdefault(find(n), []).append(n)
     # Largest by count; break ties toward the lower indices for determinism.
-    return set(max(groups.values(), key=lambda g: (len(g), -min(g))))
+    best = max(groups, key=lambda root: (len(groups[root]), -min(groups[root])))
+    return set(groups[best])
 
 
 def _mask_clip(params: TrackpadParams, x0: float, y0: float, x1: float, y1: float):

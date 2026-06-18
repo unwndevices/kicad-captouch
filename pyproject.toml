@@ -40,3 +40,11 @@ target-version = "py310"
 [tool.ruff.lint]
 # Default rules (pyflakes + a subset of pycodestyle) plus import sorting.
 select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src/captouch"]
+# shapely and PySide6 ship no type stubs; don't fail on their missing imports.
+ignore_missing_imports = true
+warn_redundant_casts = true
+warn_unused_ignores = true

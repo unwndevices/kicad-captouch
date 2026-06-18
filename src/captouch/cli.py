@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 from . import __version__
 from .export import footprint, symbol
@@ -94,7 +95,7 @@ def _params_from_args(args: argparse.Namespace) -> SliderParams:
     """Start from a preset (or defaults) and apply only explicitly-set flags."""
     base = SLIDER_PRESETS[args.preset] if args.preset else SliderParams()
 
-    overrides: dict[str, object] = {}
+    overrides: dict[str, Any] = {}
     for flag, field in (
         ("name", "name"),
         ("shape", "segment_shape"),
@@ -199,7 +200,7 @@ def _wheel_params_from_args(args: argparse.Namespace) -> WheelParams:
     """Start from a preset (or defaults) and apply only explicitly-set flags."""
     base = WHEEL_PRESETS[args.preset] if args.preset else WheelParams()
 
-    overrides: dict[str, object] = {}
+    overrides: dict[str, Any] = {}
     for flag, field in (
         ("name", "name"),
         ("shape", "segment_shape"),
@@ -305,7 +306,7 @@ def _trackpad_params_from_args(args: argparse.Namespace) -> TrackpadParams:
     """Start from a preset (or defaults) and apply only explicitly-set flags."""
     base = TRACKPAD_PRESETS[args.preset] if args.preset else TrackpadParams()
 
-    overrides: dict[str, object] = {}
+    overrides: dict[str, Any] = {}
     for flag, field in (
         ("name", "name"),
         ("num_rows", "num_rows"),

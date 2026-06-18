@@ -28,6 +28,9 @@ from ..sexpr import Sym
 #: Any widget geometry the exporter can serialise (duck-typed: ``electrodes``,
 #: ``bounds``, ``params.name``, ``fab_primitives``, ``courtyard_outline``).
 WidgetGeometry = Union[SliderGeometry, WheelGeometry, TrackpadGeometry]
+# Widgets whose copper is one custom pad per electrode (slider, wheel). The
+# trackpad's copper spans many polygons per net, so it has its own exporter.
+ElectrodeGeometry = Union[SliderGeometry, WheelGeometry]
 
 # KiCad 9.0 footprint/board S-expression format version (date token). KiCad 10
 # reads and upgrades it; emitting a newer token would make KiCad 9 reject it.
@@ -232,7 +235,7 @@ def footprint_text(name: str, polygon: Sequence[Point], *, value: str | None = N
 # --------------------------------------------------------------------------- #
 # Widget footprint: one custom pad per electrode + courtyard + fab outline
 # --------------------------------------------------------------------------- #
-def widget_footprint(geo: WidgetGeometry) -> list:
+def widget_footprint(geo: ElectrodeGeometry) -> list:
     """Build a footprint node for any widget (slider, wheel, …) from its geometry.
 
     The documentation outline (``F.Fab``) and courtyard (``F.CrtYd``) come from
@@ -264,7 +267,7 @@ def widget_footprint(geo: WidgetGeometry) -> list:
     ]
 
 
-def widget_footprint_text(geo: WidgetGeometry) -> str:
+def widget_footprint_text(geo: ElectrodeGeometry) -> str:
     """Serialise any widget footprint to `.kicad_mod` text (trailing newline)."""
     return sexpr.dumps(widget_footprint(geo)) + "\n"
 

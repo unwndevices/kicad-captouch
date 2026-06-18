@@ -19,7 +19,7 @@ from typing import Union
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPen, QPolygonF
-from PySide6.QtWidgets import QGraphicsScene, QGraphicsView
+from PySide6.QtWidgets import QGraphicsPolygonItem, QGraphicsScene, QGraphicsView
 
 from ..export.footprint import COURTYARD_MARGIN
 from ..geometry import Electrode, SliderGeometry, TrackpadGeometry, WheelGeometry
@@ -89,8 +89,8 @@ class PreviewView(QGraphicsView):
 
         self._geometry: WidgetGeometry | None = None
         self._layer_items: dict[str, list] = {name: [] for name, _ in LAYERS}
-        self._electrode_items: dict[str, object] = {}  # pad_number -> polygon item
-        self._net_items: dict[str, list] = {}  # trackpad: pad_number -> [polygon items]
+        self._electrode_items: dict[str, QGraphicsPolygonItem] = {}  # pad_number -> item
+        self._net_items: dict[str, list[QGraphicsPolygonItem]] = {}  # trackpad net items
         self._layer_visible: dict[str, bool] = {name: True for name, _ in LAYERS}
         self._layer_visible["anchors"] = False  # off by default (visual noise)
 

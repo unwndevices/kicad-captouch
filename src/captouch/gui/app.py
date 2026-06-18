@@ -55,13 +55,13 @@ _WIDGETS = (("Slider", ParamPanel), ("Wheel", WheelPanel), ("Trackpad", Trackpad
 
 def _summary(geo: WidgetGeometry) -> str:
     """One-line description of the built geometry for the status bar."""
-    p = geo.params
     if isinstance(geo, TrackpadGeometry):
+        tp = geo.params
         minx, miny, maxx, maxy = geo.bounds
         summary = (
-            f"mutual-cap trackpad — {p.num_rows}×{p.num_cols} diamonds "
-            f"({len(geo.rx_nets)} Rx + {len(geo.tx_nets)} Tx, {p.num_nodes} nodes) · "
-            f"pitch {p.diamond_pitch:.2f} gap {p.diamond_gap:.2f} mm · "
+            f"mutual-cap trackpad — {tp.num_rows}×{tp.num_cols} diamonds "
+            f"({len(geo.rx_nets)} Rx + {len(geo.tx_nets)} Tx, {tp.num_nodes} nodes) · "
+            f"pitch {tp.diamond_pitch:.2f} gap {tp.diamond_gap:.2f} mm · "
             f"extent {maxx - minx:.2f} × {maxy - miny:.2f} mm"
         )
         partials = geo.partial_channels()
@@ -70,15 +70,17 @@ def _summary(geo: WidgetGeometry) -> str:
             summary += f" · {len(partials)} partial ch <50%: {names} (disable in fw)"
         return summary
     if isinstance(geo, WheelGeometry):
+        wp = geo.params
         return (
-            f"{p.segment_shape} wheel — {len(geo.electrodes)} electrodes, "
-            f"W={p.width:.2f} A={p.air_gap:.2f} ring={p.ring_width:.2f} mm · "
-            f"OD {p.outer_diameter:.2f} mm, centre hole {p.center_hole_diameter:.2f} mm"
+            f"{wp.segment_shape} wheel — {len(geo.electrodes)} electrodes, "
+            f"W={wp.width:.2f} A={wp.air_gap:.2f} ring={wp.ring_width:.2f} mm · "
+            f"OD {wp.outer_diameter:.2f} mm, centre hole {wp.center_hole_diameter:.2f} mm"
         )
+    sp = geo.params
     minx, miny, maxx, maxy = geo.bounds
     return (
-        f"{p.segment_shape} slider — {len(geo.active)} active + {len(geo.dummies)} "
-        f"dummy, W={p.width:.2f} A={p.air_gap:.2f} H={p.segment_height:.2f} mm · "
+        f"{sp.segment_shape} slider — {len(geo.active)} active + {len(geo.dummies)} "
+        f"dummy, W={sp.width:.2f} A={sp.air_gap:.2f} H={sp.segment_height:.2f} mm · "
         f"extent {maxx - minx:.2f} × {maxy - miny:.2f} mm"
     )
 

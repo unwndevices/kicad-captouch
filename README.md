@@ -27,6 +27,10 @@ Sliders, wheels, **and XY diamond trackpads** are done, with a desktop GUI, **ve
   nodes. The diamond half-diagonal is derived from the pitch and gap so every facing edge keeps the
   nominal clearance.
 
+Each widget can be **designed from its overall size** instead of an element count — a target slider
+length, wheel outer diameter, or trackpad panel width×height — and the generator derives the count
+from the pitch (trimming or insetting the trackpad lattice to the exact outline).
+
 Sliders and wheels enforce the Infineon `W + 2A = finger_diameter` constraint; every widget emits a
 footprint plus a matching symbol whose pins map 1:1 to the pads, in the **KiCad 9.0** format
 (footprint `version 20241229`, symbol lib `version 20241209`) that both KiCad 9 and 10 accept — all
@@ -66,6 +70,9 @@ captouch slider --out examples --name CT_Slider
 # from a vendor preset, overriding a couple of parameters
 captouch slider --preset infineon --shape interdigitated --num-segments 6
 
+# or size from the overall length instead of a segment count
+captouch slider --length 100
+
 captouch slider --list-presets        # infineon / microchip / azoteq
 captouch slider --help                # full parameter list
 ```
@@ -73,7 +80,8 @@ captouch slider --help                # full parameter list
 Key parameters: `--shape {rectangular,chevron,interdigitated}`, `--num-segments`,
 `--segment-width`/`--segment-height`, `--air-gap`, `--finger-diameter`, `--num-fingers`,
 `--tooth-depth`, `--end-dummies`, `--corner-radius`, `--tip-radius`. Segment width is derived from
-the finger diameter unless given; `--relax-finger-constraint` waives the `W + 2A` check.
+the finger diameter unless given; `--relax-finger-constraint` waives the `W + 2A` check. Pass
+`--length` to size the strip by its overall length (the segment count is derived from the pitch).
 
 Chevron tooth-tips are acute and would otherwise etch to fab-resolution copper points, so they are
 rounded for ESD relief by `--tip-radius` (default 0.15 mm, chevron-only); `--corner-radius` adds
@@ -88,6 +96,9 @@ captouch wheel --out examples --name CT_Wheel
 # from a vendor preset, overriding the segment count
 captouch wheel --preset st_rotary --num-segments 6
 
+# or size from the target outer diameter instead of a segment count
+captouch wheel --outer-diameter 50
+
 captouch wheel --list-presets         # st_rotary / microchip / infineon
 captouch wheel --help                 # full parameter list
 ```
@@ -95,7 +106,8 @@ captouch wheel --help                 # full parameter list
 Wheel-specific parameters: `--ring-width` (radial width), `--arc-resolution` (circle tessellation,
 segments per 90°); it also takes `--corner-radius` / `--tip-radius` like the slider. The outer
 diameter and centre-hole diameter are **derived** from the pitch and ring width and printed on
-generation. Wheels are continuous, so there are no end dummies.
+generation. Wheels are continuous, so there are no end dummies. Pass `--outer-diameter` to size the
+ring by its overall diameter (the segment count is derived from the pitch).
 
 ### Generate a trackpad
 
@@ -106,16 +118,23 @@ captouch trackpad --out examples --name CT_Trackpad
 # from a vendor preset, overriding the matrix size
 captouch trackpad --preset infineon --num-rows 6 --num-cols 6
 
+# or size from the overall pad — counts derived, lattice trimmed/inset to the exact outline
+captouch trackpad --panel-width 300 --panel-height 200
+
 captouch trackpad --list-presets      # infineon / microchip / compact
 captouch trackpad --help              # full parameter list
 ```
 
-Trackpad parameters: `--num-rows` (Rx sense lines) `×` `--num-cols` (Tx drive lines), each 3–16;
-`--diamond-pitch` (row/column centre spacing) and `--diamond-gap` (copper-to-copper gap);
-`--bridge-width` (the F.Cu neck / B.Cu strap width) and `--via-drill` / `--via-diameter` for the
-cross-layer bridge vias. The Tx columns are bridged on `B.Cu` so the design needs **two copper
-layers**. Note the connecting necks pinch tighter than the bulk diamond gap (~`gap/√2`), as in any
-diamond pattern — that pinch is what the DRC gate checks.
+Trackpad parameters: `--num-rows` (Rx sense lines) `×` `--num-cols` (Tx drive lines), each ≥ 2 with
+no upper cap (large pads are allowed; 3–16 / ≤100 nodes is AT11849's *recommendation* for a touch
+surface, not a hard limit); `--diamond-pitch` (row/column centre spacing) and `--diamond-gap`
+(copper-to-copper gap); `--bridge-width` (the F.Cu neck / B.Cu strap width) and `--via-drill` /
+`--via-diameter` for the cross-layer bridge vias. The Tx columns are bridged on `B.Cu` so the design
+needs **two copper layers**. Note the connecting necks pinch tighter than the bulk diamond gap
+(~`gap/√2`), as in any diamond pattern — that pinch is what the DRC gate checks. To design from a
+known overall size, give `--panel-width`/`--panel-height` instead of the counts: the row/column
+counts are derived from the pitch and the lattice is trimmed (overflow) or inset (underflow) to the
+exact outline.
 
 ### Fab-rule guards
 

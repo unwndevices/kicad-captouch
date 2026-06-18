@@ -36,6 +36,7 @@ format is accepted by both).
 captouch slider                       # 4-segment chevron slider → ./examples
 captouch wheel  --preset st_rotary    # 5-segment rotary wheel
 captouch trackpad --num-rows 4 --num-cols 5   # 4×5 mutual-cap diamond pad
+captouch trackpad --panel-width 300 --panel-height 200  # or size from the overall pad
 captouch gui                          # live-preview desktop app
 ```
 
@@ -78,6 +79,8 @@ Key flags: `--shape {rectangular,chevron,interdigitated}`, `--num-segments`,
 (`W = finger − 2·gap`) so Infineon's `W + 2A = finger` rule holds; pass
 `--relax-finger-constraint` to waive that check. Chevron tips are rounded by
 `--tip-radius` (default 0.15 mm) for ESD/etch relief — set `0` for sharp tips.
+Or size the strip by its overall `--length` instead of `--num-segments` (see
+[Design from overall size](#design-from-overall-size)).
 
 ### Wheel
 
@@ -88,7 +91,9 @@ captouch wheel --preset microchip --num-segments 6
 Wheel-specific: `--ring-width` (radial width) and `--arc-resolution` (polyline
 segments per 90° of arc). The mean radius — and therefore the outer and
 centre-hole diameters — is **derived from the pitch** and printed on generation.
-Wheels are continuous, so there are no end dummies.
+Wheels are continuous, so there are no end dummies. Or size the ring by its target
+`--outer-diameter` instead of `--num-segments` (see
+[Design from overall size](#design-from-overall-size)).
 
 ### Trackpad
 
@@ -106,7 +111,9 @@ hard limit, so large pads are allowed);
 `--via-drill` / `--via-diameter` for the cross-layer bridge vias. Tx columns are
 bridged on **B.Cu**, so the design needs two copper layers. The connecting necks
 pinch tighter than the bulk diamond gap (~`gap/√2`) — that pinch is what the fab
-guard and the DRC gate watch.
+guard and the DRC gate watch. To size from the panel instead of a count, use
+`--panel-width`/`--panel-height` (see
+[Design from overall size](#design-from-overall-size)).
 
 **Mask shape.** `--mask-shape {rect,rrect,circle}` sets the pad's outer outline
 (default `rect`):
@@ -148,6 +155,33 @@ wrote examples/CT_Trackpad.kicad_sym
     - Tx1: 49% area remaining
     - Tx7: 49% area remaining
 ```
+
+### Design from overall size
+
+When you know the **overall size** the interface has to fit (an enclosure cutout,
+say) rather than an element count, size it directly and let the generator derive
+the count from the pitch — the pitch is never stretched, so the elements stay the
+right size for the finger:
+
+```sh
+captouch slider   --length 100                         # a 100 mm strip
+captouch wheel    --outer-diameter 50                  # a 50 mm wheel
+captouch trackpad --panel-width 300 --panel-height 200 # a 300×200 mm XY pad
+```
+
+- **Slider** (`--length`) and **wheel** (`--outer-diameter`): the element count is
+  rounded to best match the target; the achieved length / diameter lands within
+  about half a pitch (slider) / one pitch (wheel) of the target and is printed on
+  generation. Each is mutually exclusive with `--num-segments`.
+- **Trackpad** (`--panel-width` / `--panel-height`, given together, mutually
+  exclusive with `--num-rows`/`--num-cols`): the row/column counts are
+  `round(dimension / pitch)`, and the **outline is pinned to exactly the requested
+  size**. Where the diamond lattice overflows the outline its rim is trimmed (clean
+  box cuts → partial edge channels); where it underflows, the rim terminates in
+  clean half-diamonds and the surplus is left as an empty margin out to the outline.
+
+In the GUI each panel has a matching **"Design from overall size"** checkbox that
+reveals the target field(s) and shows the derived element count live.
 
 ### Support copper (ground & guard, optional)
 
@@ -260,6 +294,9 @@ captouch gui            # or: captouch-gui
 
 - A **Widget** selector swaps the slider / wheel / trackpad parameter panel.
 - A **Preset** menu loads vendor starting points into the form.
+- Each panel has a **"Design from overall size"** checkbox (length / outer diameter
+  / panel width×height) that derives the element count from the pitch and shows it
+  live — the same sizing as the CLI `--length` / `--outer-diameter` / `--panel-*`.
 - The trackpad panel has a **Mask** group — shape (rect / rrect / circle), a
   **clip mode** (inscribe / conform, active only for a curved mask), and a
   corner-radius (rrect) or radius (circle; *Auto* = inscribed) control — that

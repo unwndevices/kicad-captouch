@@ -60,6 +60,47 @@ def test_from_params_dispatches_by_widget(tmp_path):
     assert (tmp_path / "b" / "T.kicad_sym").exists()
 
 
+def _zones(text):
+    from captouch import sexpr
+
+    return len(sexpr.find_all(sexpr.loads(text), "zone"))
+
+
+def test_support_flags_emit_zones_and_report(tmp_path, capsys):
+    rc = main(["slider", "--out", str(tmp_path), "--name", "S", "--ground-hatch", "--guard-ring"])
+    assert rc == 0
+    assert _zones((tmp_path / "S.kicad_mod").read_text()) == 2  # ground + guard
+    out = capsys.readouterr().out
+    assert "support copper" in out and "GND pin" in out
+
+
+def test_support_off_by_default_no_zones(tmp_path):
+    main(["wheel", "--out", str(tmp_path), "--name", "W"])
+    assert _zones((tmp_path / "W.kicad_mod").read_text()) == 0
+
+
+def test_support_flags_round_trip_through_params(tmp_path):
+    # The support fields survive --save-params / from-params (JSON carries them).
+    pj = tmp_path / "p.json"
+    main(
+        [
+            "slider",
+            "--out",
+            str(tmp_path / "a"),
+            "--name",
+            "S",
+            "--guard-ring",
+            "--save-params",
+            str(pj),
+        ]
+    )
+    assert main(["from-params", str(pj), "--out", str(tmp_path / "b")]) == 0
+    assert (tmp_path / "a" / "S.kicad_mod").read_text() == (
+        tmp_path / "b" / "S.kicad_mod"
+    ).read_text()
+    assert _zones((tmp_path / "b" / "S.kicad_mod").read_text()) == 1
+
+
 def test_from_params_bad_widget_errors(tmp_path, capsys):
     bad = tmp_path / "bad.json"
     bad.write_text('{"widget": "octopad", "params": {}}')
@@ -194,6 +235,16 @@ def test_trackpad_min_feature_tracks_fab_profile():
         clip_mode=None,
         corner_radius=None,
         radius=None,
+        # support-copper flags (all off / unset)
+        ground_hatch=False,
+        guard_ring=False,
+        guard_no_mask_open=False,
+        ground_margin=None,
+        ground_hatch_width=None,
+        ground_hatch_pitch=None,
+        guard_width=None,
+        guard_gap=None,
+        guard_break=None,
     )
     for prof in ("default", "jlcpcb", "oshpark"):
         p = _trackpad_params_from_args(Namespace(fab_profile=prof, **unset))

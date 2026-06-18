@@ -16,7 +16,7 @@ from typing import Any
 
 from . import __version__
 from .export import footprint, symbol
-from .geometry import build_slider, build_trackpad, build_wheel
+from .geometry import build_slider, build_trackpad, build_wheel, net_tie_number
 from .params import (
     CLIP_MODES,
     DEFAULT_PROFILE,
@@ -91,6 +91,84 @@ def _report_fab(violations, profile_key: str, *, strict: bool) -> None:
         )
 
 
+# --------------------------------------------------------------------------- #
+# optional support copper (shared across slider / wheel / trackpad)
+# --------------------------------------------------------------------------- #
+def _add_support_args(p: argparse.ArgumentParser) -> None:
+    """Add the opt-in support-copper flags (all default off) to a widget subparser."""
+    g = p.add_argument_group("support copper (optional, default off)")
+    g.add_argument(
+        "--ground-hatch",
+        action="store_true",
+        help="add a hatched ground pour on the opposite layer (B.Cu)",
+    )
+    g.add_argument("--ground-margin", type=float, help="ground pour reach past the electrodes (mm)")
+    g.add_argument(
+        "--hatch-width", type=float, dest="ground_hatch_width", help="ground hatch line width (mm)"
+    )
+    g.add_argument(
+        "--hatch-pitch",
+        type=float,
+        dest="ground_hatch_pitch",
+        help="ground hatch centre-to-centre pitch (mm)",
+    )
+    g.add_argument(
+        "--guard-ring", action="store_true", help="add a grounded guard / ESD ring on F.Cu"
+    )
+    g.add_argument("--guard-width", type=float, help="guard ring band width (mm)")
+    g.add_argument("--guard-gap", type=float, help="gap from the electrodes to the guard ring (mm)")
+    g.add_argument("--guard-break", type=float, help="break in the guard ring (mm; not a loop)")
+    g.add_argument(
+        "--guard-no-mask-open",
+        action="store_true",
+        help="keep solder mask over the guard ring (default: expose it, per §4.6)",
+    )
+
+
+def _support_overrides(args: argparse.Namespace) -> dict[str, Any]:
+    """Collect the support-copper field overrides from explicitly-set flags."""
+    overrides: dict[str, Any] = {}
+    if args.ground_hatch:
+        overrides["ground_hatch"] = True
+    if args.guard_ring:
+        overrides["guard_ring"] = True
+    if args.guard_no_mask_open:
+        overrides["guard_mask_open"] = False
+    for field in (
+        "ground_margin",
+        "ground_hatch_width",
+        "ground_hatch_pitch",
+        "guard_width",
+        "guard_gap",
+        "guard_break",
+    ):
+        value = getattr(args, field)
+        if value is not None:
+            overrides[field] = value
+    return overrides
+
+
+def _report_support(geo) -> None:
+    """Describe any support copper that was added (and the net-tie reminder)."""
+    p = geo.params
+    if not (p.ground_hatch or p.guard_ring):
+        return
+    bits = []
+    if p.ground_hatch:
+        bits.append(
+            f"hatched ground on B.Cu ({p.ground_hatch_width:.2f} mm line / "
+            f"{p.ground_hatch_pitch:.2f} mm pitch)"
+        )
+    if p.guard_ring:
+        mask = "mask-free" if p.guard_mask_open else "mask-covered"
+        bits.append(
+            f"{mask} guard/ESD ring on F.Cu ({p.guard_width:.2f} mm, {p.guard_gap:.2f} mm gap)"
+        )
+    tie = net_tie_number(geo)
+    print(f"  support copper: {', '.join(bits)}")
+    print(f"    tied to the GND pin (pad {tie}); assign the zone net to GND on your board")
+
+
 def _maybe_save_params(args: argparse.Namespace, params: WidgetParams) -> None:
     """Write the resolved params as JSON if ``--save-params`` was given."""
     path = getattr(args, "save_params", None)
@@ -126,6 +204,7 @@ def _params_from_args(args: argparse.Namespace) -> SliderParams:
             overrides[field] = value
     if args.relax_finger_constraint:
         overrides["relax_finger_constraint"] = True
+    overrides.update(_support_overrides(args))
 
     return replace(base, **overrides)
 
@@ -166,6 +245,7 @@ def _slider(args: argparse.Namespace) -> int:
         f"W={params.width:.2f} A={params.air_gap:.2f} H={params.segment_height:.2f} mm, "
         f"extent {maxx - minx:.2f} x {maxy - miny:.2f} mm"
     )
+    _report_support(geo)
     _report_fab(violations, args.fab_profile, strict=False)
     return 0
 
@@ -204,6 +284,7 @@ def _add_slider_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument(
         "--save-params", type=Path, metavar="FILE", help="also write the resolved params as JSON"
     )
+    _add_support_args(p)
     _add_fab_args(p)
     p.set_defaults(func=_slider)
 
@@ -235,6 +316,7 @@ def _wheel_params_from_args(args: argparse.Namespace) -> WheelParams:
             overrides[field] = value
     if args.relax_finger_constraint:
         overrides["relax_finger_constraint"] = True
+    overrides.update(_support_overrides(args))
 
     return replace(base, **overrides)
 
@@ -274,6 +356,7 @@ def _wheel(args: argparse.Namespace) -> int:
         f"OD={params.outer_diameter:.2f} mm, centre hole "
         f"{params.center_hole_diameter:.2f} mm"
     )
+    _report_support(geo)
     _report_fab(violations, args.fab_profile, strict=False)
     return 0
 
@@ -314,6 +397,7 @@ def _add_wheel_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument(
         "--save-params", type=Path, metavar="FILE", help="also write the resolved params as JSON"
     )
+    _add_support_args(p)
     _add_fab_args(p)
     p.set_defaults(func=_wheel)
 
@@ -347,6 +431,7 @@ def _trackpad_params_from_args(args: argparse.Namespace) -> TrackpadParams:
     # The smallest copper fragment a curved mask may leave tracks the chosen fab's
     # finest etchable feature, so a non-rect mask never produces sub-fab slivers.
     overrides["min_feature"] = FAB_PROFILES[args.fab_profile].min_track_width
+    overrides.update(_support_overrides(args))
 
     return replace(base, **overrides)
 
@@ -387,6 +472,7 @@ def _trackpad(args: argparse.Namespace) -> int:
         f"extent {params.width:.2f} x {params.height:.2f} mm"
     )
     _report_partial_channels(geo)
+    _report_support(geo)
     _report_fab(violations, args.fab_profile, strict=False)
     return 0
 
@@ -449,6 +535,7 @@ def _add_trackpad_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument(
         "--save-params", type=Path, metavar="FILE", help="also write the resolved params as JSON"
     )
+    _add_support_args(p)
     _add_fab_args(p)
     p.set_defaults(func=_trackpad)
 

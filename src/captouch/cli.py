@@ -19,6 +19,7 @@ from .geometry import build_slider, build_trackpad, build_wheel
 from .params import (
     DEFAULT_PROFILE,
     FAB_PROFILES,
+    MASK_SHAPES,
     SLIDER_PRESETS,
     TRACKPAD_PRESETS,
     WHEEL_PRESETS,
@@ -280,10 +281,17 @@ def _trackpad_params_from_args(args: argparse.Namespace) -> TrackpadParams:
         ("bridge_width", "bridge_width"),
         ("via_drill", "via_drill"),
         ("via_diameter", "via_diameter"),
+        ("mask_shape", "mask_shape"),
+        ("corner_radius", "corner_radius"),
+        ("radius", "radius"),
     ):
         value = getattr(args, flag)
         if value is not None:
             overrides[field] = value
+
+    # The smallest copper fragment a curved mask may leave tracks the chosen fab's
+    # finest etchable feature, so a non-rect mask never produces sub-fab slivers.
+    overrides["min_feature"] = FAB_PROFILES[args.fab_profile].min_track_width
 
     return replace(base, **overrides)
 
@@ -340,6 +348,13 @@ def _add_trackpad_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--bridge-width", type=float, help="F.Cu neck / B.Cu strap width (mm)")
     p.add_argument("--via-drill", type=float, help="bridge via finished hole diameter (mm)")
     p.add_argument("--via-diameter", type=float, help="bridge via outer copper diameter (mm)")
+    p.add_argument("--mask-shape", choices=MASK_SHAPES,
+                   help="outer outline: rect (default), rrect, or circle")
+    p.add_argument("--corner-radius", type=float,
+                   help="rounded-rect fillet radius (mm; with --mask-shape rrect)")
+    p.add_argument("--radius", type=float,
+                   help="circle mask radius (mm; with --mask-shape circle; "
+                        "default = inscribed 0.5·min(width,height))")
     _add_fab_args(p)
     p.set_defaults(func=_trackpad)
 

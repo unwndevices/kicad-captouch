@@ -62,3 +62,40 @@ def test_strict_passes_when_geometry_clears_the_profile(tmp_path):
     rc = main(["trackpad", "--out", str(tmp_path), "--name", "T", "--strict"])
     assert rc == 0
     assert (tmp_path / "T.kicad_mod").exists()
+
+
+# -- mask-shape flags ------------------------------------------------------- #
+def test_trackpad_circle_mask_writes_circle_outline(tmp_path):
+    rc = main(["trackpad", "--out", str(tmp_path), "--name", "T",
+               "--num-rows", "4", "--num-cols", "4", "--mask-shape", "circle"])
+    assert rc == 0
+    assert "(fp_circle" in (tmp_path / "T.kicad_mod").read_text()  # F.Fab circle
+
+
+def test_trackpad_rrect_mask_writes_poly_outline(tmp_path):
+    rc = main(["trackpad", "--out", str(tmp_path), "--name", "T",
+               "--mask-shape", "rrect", "--corner-radius", "2"])
+    assert rc == 0
+    assert "(fp_poly" in (tmp_path / "T.kicad_mod").read_text()  # F.Fab polyline
+
+
+def test_trackpad_corner_radius_without_rrect_errors(tmp_path, capsys):
+    rc = main(["trackpad", "--out", str(tmp_path), "--name", "T", "--corner-radius", "2"])
+    assert rc == 2  # SliderError path; nothing written
+    assert not (tmp_path / "T.kicad_mod").exists()
+    assert "corner_radius" in capsys.readouterr().out
+
+
+def test_trackpad_min_feature_tracks_fab_profile():
+    from argparse import Namespace
+
+    from captouch.cli import _trackpad_params_from_args
+    from captouch.params import FAB_PROFILES
+
+    unset = dict(preset=None, name=None, num_rows=None, num_cols=None,
+                 diamond_pitch=None, diamond_gap=None, bridge_width=None,
+                 via_drill=None, via_diameter=None, mask_shape=None,
+                 corner_radius=None, radius=None)
+    for prof in ("default", "jlcpcb", "oshpark"):
+        p = _trackpad_params_from_args(Namespace(fab_profile=prof, **unset))
+        assert p.min_feature == FAB_PROFILES[prof].min_track_width

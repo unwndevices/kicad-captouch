@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..geometry import build_trackpad
-from ..params import TRACKPAD_PRESETS, TrackpadParams
+from ..params import MASK_SHAPES, TRACKPAD_PRESETS, TrackpadParams
 from ._panel_base import PRESET_PLACEHOLDER as _PRESET_PLACEHOLDER
 from ._panel_base import PanelBase
 
@@ -82,11 +82,36 @@ class TrackpadPanel(PanelBase):
         bf.addRow("Via diameter", self.via_diameter)
         root.addWidget(bridge_box)
 
+        # Outer mask: rect (default), rounded-rect, or circle. corner_radius
+        # applies to rrect, radius to circle (Auto = inscribed 0.5·min(W,H)).
+        self.mask_shape = QComboBox()
+        self.mask_shape.addItems(MASK_SHAPES)
+        self.mask_shape.currentTextChanged.connect(self._on_mask)
+        self.corner_radius = self._dspin(0.5, 20.0, 0.5)
+        self.corner_radius.setValue(2.0)
+        self.radius, self.radius_auto = self._auto_dspin(1.0, 50.0, 0.5)
+        self.radius_auto.setChecked(True)
+        mask_box = QGroupBox("Mask")
+        mf2 = QFormLayout(mask_box)
+        mf2.addRow("Shape", self.mask_shape)
+        mf2.addRow("Corner radius (mm)", self.corner_radius)
+        mf2.addRow("Radius (mm)", self._with_auto(self.radius, self.radius_auto))
+        root.addWidget(mask_box)
+
         root.addStretch(1)
 
         self.name.textEdited.connect(self._emit)
+        self._on_mask()  # set initial enabled state for the default rect mask
 
     # -- signals ------------------------------------------------------------ #
+    def _on_mask(self, *args) -> None:
+        """Enable corner_radius for rrect and the radius row for circle only."""
+        shape = self.mask_shape.currentText()
+        self.corner_radius.setEnabled(shape == "rrect")
+        self.radius_auto.setEnabled(shape == "circle")
+        self.radius.setEnabled(shape == "circle" and not self.radius_auto.isChecked())
+        self._emit()
+
     def _on_preset(self, index: int) -> None:
         if index <= 0:
             return
@@ -98,7 +123,8 @@ class TrackpadPanel(PanelBase):
     # -- params <-> form ---------------------------------------------------- #
     def params(self) -> TrackpadParams:
         """Read the form into a (possibly invalid, unvalidated) TrackpadParams."""
-        return TrackpadParams(
+        shape = self.mask_shape.currentText()
+        kw: dict = dict(
             num_rows=self.num_rows.value(),
             num_cols=self.num_cols.value(),
             diamond_pitch=self.diamond_pitch.value(),
@@ -106,8 +132,16 @@ class TrackpadPanel(PanelBase):
             bridge_width=self.bridge_width.value(),
             via_drill=self.via_drill.value(),
             via_diameter=self.via_diameter.value(),
+            mask_shape=shape,
             name=self.name.text() or "CT_Trackpad",
         )
+        # corner_radius / radius are only valid for their own shape (validation
+        # rejects a stray value otherwise), so include each only when it applies.
+        if shape == "rrect":
+            kw["corner_radius"] = self.corner_radius.value()
+        if shape == "circle" and not self.radius_auto.isChecked():
+            kw["radius"] = self.radius.value()
+        return TrackpadParams(**kw)
 
     def set_params(self, p: TrackpadParams) -> None:
         """Load *p* into the form without emitting :attr:`changed`."""
@@ -121,5 +155,12 @@ class TrackpadPanel(PanelBase):
             self.bridge_width.setValue(p.bridge_width)
             self.via_drill.setValue(p.via_drill)
             self.via_diameter.setValue(p.via_diameter)
+            self.mask_shape.setCurrentText(p.mask_shape)
+            if p.corner_radius:
+                self.corner_radius.setValue(p.corner_radius)
+            self.radius_auto.setChecked(p.radius is None)
+            if p.radius is not None:
+                self.radius.setValue(p.radius)
+            self._on_mask()
         finally:
             self._loading = False

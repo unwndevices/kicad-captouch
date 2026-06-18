@@ -272,6 +272,33 @@ def test_trackpad_preview_matches_geometry(qapp):
         assert win.preview.net_polygon_points(net.pad_number) == expected
 
 
+def test_trackpad_panel_mask_controls_drive_params(qapp):
+    from captouch.gui.trackpad_panel import TrackpadPanel
+
+    panel = TrackpadPanel()
+    panel.set_params(TrackpadParams(num_rows=4, num_cols=4))
+    assert panel.params().mask_shape == "rect"
+
+    panel.mask_shape.setCurrentText("circle")
+    p = panel.params()
+    assert p.mask_shape == "circle" and p.radius is None  # Auto → inscribed default
+    assert build_trackpad(p).fab_primitives[0][0] == "circle"  # must not raise
+
+    panel.mask_shape.setCurrentText("rrect")
+    panel.corner_radius.setValue(2.5)
+    assert panel.params().mask_shape == "rrect"
+    assert panel.params().corner_radius == 2.5
+
+
+def test_trackpad_panel_roundtrips_circle_params(qapp):
+    from captouch.gui.trackpad_panel import TrackpadPanel
+
+    panel = TrackpadPanel()
+    panel.set_params(TrackpadParams(num_rows=5, num_cols=5, mask_shape="circle", radius=9.0))
+    got = panel.params()
+    assert got.mask_shape == "circle" and got.radius == 9.0
+
+
 @pytest.mark.parametrize("shape,kw", [("rrect", {"corner_radius": 2.0}), ("circle", {})])
 def test_trackpad_masked_outline_renders(qapp, shape, kw):
     from captouch.gui.preview import PreviewView

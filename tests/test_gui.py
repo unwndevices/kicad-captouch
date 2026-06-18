@@ -272,6 +272,43 @@ def test_trackpad_preview_matches_geometry(qapp):
         assert win.preview.net_polygon_points(net.pad_number) == expected
 
 
+def test_trackpad_panel_size_driven_derives_counts(qapp):
+    from captouch.gui.trackpad_panel import TrackpadPanel
+
+    panel = TrackpadPanel()
+    # Off by default: count-driven, no panel recorded.
+    assert not panel.size_driven.isChecked()
+    assert panel.params().panel_width is None
+    assert panel.num_rows.isEnabled() and not panel.panel_width.isEnabled()
+
+    panel.size_driven.setChecked(True)
+    panel.diamond_pitch.setValue(5.0)
+    panel.panel_width.setValue(300.0)
+    panel.panel_height.setValue(200.0)
+    p = panel.params()
+    assert (p.num_cols, p.num_rows) == (60, 40)  # round(dim / pitch)
+    assert (p.panel_width, p.panel_height) == (300.0, 200.0)
+    assert (p.width, p.height) == (300.0, 200.0)  # outline pinned to the target
+    # The manual count spins are read-only while size-driven.
+    assert not panel.num_rows.isEnabled() and panel.panel_width.isEnabled()
+    build_trackpad(p)  # must not raise
+
+
+def test_trackpad_panel_restores_size_mode_on_load(qapp):
+    from captouch.gui.trackpad_panel import TrackpadPanel
+
+    panel = TrackpadPanel()
+    panel.set_params(TrackpadParams.from_size(120, 80, diamond_pitch=4.0, name="RT"))
+    assert panel.size_driven.isChecked()
+    got = panel.params()
+    assert (got.panel_width, got.panel_height) == (120.0, 80.0)
+    assert (got.num_cols, got.num_rows) == (30, 20)
+    # Loading a plain count-driven params switches the mode back off.
+    panel.set_params(TrackpadParams(num_rows=4, num_cols=5))
+    assert not panel.size_driven.isChecked()
+    assert panel.params().panel_width is None
+
+
 def test_trackpad_panel_mask_controls_drive_params(qapp):
     from captouch.gui.trackpad_panel import TrackpadPanel
 

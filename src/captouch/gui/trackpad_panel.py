@@ -9,9 +9,11 @@ diamond pitch and gap, and the bridge / via dimensions. Editing anything emits
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFormLayout,
     QGroupBox,
+    QLabel,
     QLineEdit,
     QVBoxLayout,
 )
@@ -57,15 +59,35 @@ class TrackpadPanel(PanelBase):
         # floor for a 2-D XY matrix. 999 is just the spin box's practical ceiling.
         self.num_rows = self._spin(2, 999, 1)
         self.num_cols = self._spin(2, 999, 1)
+        # Design-from-size: enter an overall outline and the row/column counts are
+        # derived from the pitch (the lattice is trimmed / inset to the exact size).
+        self.size_driven = QCheckBox("Design from overall size")
+        self.panel_width = self._dspin(2.0, 1000.0, 1.0)
+        self.panel_height = self._dspin(2.0, 1000.0, 1.0)
+        self.panel_width.setValue(50.0)
+        self.panel_height.setValue(40.0)
+        self.derived_counts = QLabel("—")
         matrix_box = QGroupBox("Matrix")
         mf = QFormLayout(matrix_box)
         mf.addRow("Name", self.name)
+        mf.addRow(self.size_driven)
+        mf.addRow("Target width (mm)", self.panel_width)
+        mf.addRow("Target height (mm)", self.panel_height)
+        mf.addRow("Derived matrix", self.derived_counts)
         mf.addRow("Rx rows (sense)", self.num_rows)
         mf.addRow("Tx columns (drive)", self.num_cols)
         root.addWidget(matrix_box)
 
+        # Re-derive the count label whenever a size-driving input changes, and gate
+        # which inputs are live on the mode toggle.
+        self.size_driven.toggled.connect(self._on_size_mode)
+        self.size_driven.toggled.connect(self._emit)
+        self.panel_width.valueChanged.connect(self._update_derived)
+        self.panel_height.valueChanged.connect(self._update_derived)
+
         # Diamonds.
         self.diamond_pitch = self._dspin(2.0, 12.0, 0.5)
+        self.diamond_pitch.valueChanged.connect(self._update_derived)  # pitch → counts
         self.diamond_gap = self._dspin(0.1, 2.0, 0.05)
         dim_box = QGroupBox("Diamonds (mm)")
         df = QFormLayout(dim_box)
@@ -111,10 +133,18 @@ class TrackpadPanel(PanelBase):
 
         self.name.textEdited.connect(self._emit)
         self._on_mask()  # set initial enabled state for the default rect mask
+        self._on_size_mode()  # initial gating: count-driven by default
 
         self._set_tooltips(
             {
                 self.name: "Base name for the generated .kicad_mod / .kicad_sym files.",
+                self.size_driven: (
+                    "Design from a target overall size: the row/column counts are "
+                    "derived from the pitch and the lattice is trimmed / inset to the "
+                    "exact outline (e.g. a 300×200 mm enclosure cutout)."
+                ),
+                self.panel_width: "Overall outline width (mm); columns = round(width / pitch).",
+                self.panel_height: "Overall outline height (mm); rows = round(height / pitch).",
                 self.num_rows: "Rx (sense) rows on F.Cu (≥ 2; no upper cap).",
                 self.num_cols: "Tx (drive) columns bridged on B.Cu (≥ 2; no upper cap).",
                 self.diamond_pitch: "Row/column centre spacing P (mm).",
@@ -144,6 +174,39 @@ class TrackpadPanel(PanelBase):
         self.radius.setEnabled(shape == "circle" and not self.radius_auto.isChecked())
         self._emit()
 
+    def _on_size_mode(self, *args) -> None:
+        """Toggle between count-driven (rows/cols) and size-driven (panel) entry."""
+        size = self.size_driven.isChecked()
+        self.panel_width.setEnabled(size)
+        self.panel_height.setEnabled(size)
+        self.derived_counts.setEnabled(size)
+        # In size mode the counts are derived, so the manual spins are read-only.
+        self.num_rows.setEnabled(not size)
+        self.num_cols.setEnabled(not size)
+        self._update_derived()
+        self._emit()
+
+    def _update_derived(self, *args) -> None:
+        """Show the row/column counts a size-driven pad derives from its target."""
+        if not self.size_driven.isChecked():
+            self.derived_counts.setText("—")
+            return
+        sized = TrackpadParams.from_size(
+            self.panel_width.value(),
+            self.panel_height.value(),
+            diamond_pitch=self.diamond_pitch.value(),
+        )
+        self.derived_counts.setText(
+            f"{sized.num_cols} cols × {sized.num_rows} rows  "
+            f"(lattice {sized.lattice_width:.0f}×{sized.lattice_height:.0f} mm)"
+        )
+        # Mirror the derived counts into the (read-only) manual spins so they agree
+        # with the label; block signals so this display sync doesn't trigger a rebuild.
+        for spin, value in ((self.num_cols, sized.num_cols), (self.num_rows, sized.num_rows)):
+            spin.blockSignals(True)
+            spin.setValue(value)
+            spin.blockSignals(False)
+
     def _on_preset(self, index: int) -> None:
         if index <= 0:
             return
@@ -157,8 +220,6 @@ class TrackpadPanel(PanelBase):
         """Read the form into a (possibly invalid, unvalidated) TrackpadParams."""
         shape = self.mask_shape.currentText()
         kw: dict = dict(
-            num_rows=self.num_rows.value(),
-            num_cols=self.num_cols.value(),
             diamond_pitch=self.diamond_pitch.value(),
             diamond_gap=self.diamond_gap.value(),
             bridge_width=self.bridge_width.value(),
@@ -168,6 +229,21 @@ class TrackpadPanel(PanelBase):
             clip_mode=self.clip_mode.currentText(),
             name=self.name.text() or "CT_Trackpad",
         )
+        # Size-driven: derive the counts from the target outline and pin the panel;
+        # otherwise take the explicit row/column counts.
+        if self.size_driven.isChecked():
+            sized = TrackpadParams.from_size(
+                self.panel_width.value(),
+                self.panel_height.value(),
+                diamond_pitch=self.diamond_pitch.value(),
+            )
+            kw["num_rows"] = sized.num_rows
+            kw["num_cols"] = sized.num_cols
+            kw["panel_width"] = sized.panel_width
+            kw["panel_height"] = sized.panel_height
+        else:
+            kw["num_rows"] = self.num_rows.value()
+            kw["num_cols"] = self.num_cols.value()
         # corner_radius / radius are only valid for their own shape (validation
         # rejects a stray value otherwise), so include each only when it applies.
         if shape == "rrect":
@@ -182,6 +258,12 @@ class TrackpadPanel(PanelBase):
         self._loading = True
         try:
             self.name.setText(p.name)
+            # A params set with a panel was designed from an overall size: restore
+            # that mode and the target, plus the (derived) counts for when it's off.
+            self.size_driven.setChecked(p.panel_width is not None and p.panel_height is not None)
+            if p.panel_width is not None and p.panel_height is not None:
+                self.panel_width.setValue(p.panel_width)
+                self.panel_height.setValue(p.panel_height)
             self.num_rows.setValue(p.num_rows)
             self.num_cols.setValue(p.num_cols)
             self.diamond_pitch.setValue(p.diamond_pitch)
@@ -198,5 +280,6 @@ class TrackpadPanel(PanelBase):
                 self.radius.setValue(p.radius)
             self._load_support(p)
             self._on_mask()
+            self._on_size_mode()
         finally:
             self._loading = False

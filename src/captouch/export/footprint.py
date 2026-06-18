@@ -18,13 +18,13 @@ from typing import Sequence
 from typing import Union
 
 from .. import __version__, sexpr
-from ..geometry import SliderGeometry, WheelGeometry
-from ..geometry._base import ANCHOR_RADIUS
+from ..geometry import SliderGeometry, TrackpadGeometry, WheelGeometry
+from ..geometry._base import ANCHOR_RADIUS, anchor_point, polygon_points
 from ..sexpr import Sym
 
 #: Any widget geometry the exporter can serialise (duck-typed: ``electrodes``,
 #: ``bounds``, ``params.name``, ``fab_primitives``, ``courtyard_outline``).
-WidgetGeometry = Union[SliderGeometry, WheelGeometry]
+WidgetGeometry = Union[SliderGeometry, WheelGeometry, TrackpadGeometry]
 
 # KiCad 9.0 footprint/board S-expression format version (date token). KiCad 10
 # reads and upgrades it; emitting a newer token would make KiCad 9 reject it.
@@ -142,6 +142,36 @@ def custom_polygon_pad(
     ]
 
 
+def via_pad(
+    at: Point,
+    *,
+    number: str = "1",
+    drill: float = 0.3,
+    diameter: float = 0.6,
+    layers: Sequence[str] = ("*.Cu", "*.Mask"),
+) -> list:
+    """Build a plated thru-hole via pad that ties F.Cu to B.Cu for one net.
+
+    Used by the trackpad to bridge a Tx column over an Rx neck: a B.Cu strap
+    between two such vias carries the link on the back layer. Sharing *number*
+    with the net's copper pads makes KiCad treat it as the same net, so the via
+    completes the cross-layer connection (verified: DRC reports the net connected
+    only when the via is present).
+    """
+    ax, ay = at
+    return [
+        Sym("pad"),
+        number,
+        Sym("thru_hole"),
+        Sym("circle"),
+        [Sym("at"), ax, ay],
+        [Sym("size"), diameter, diameter],
+        [Sym("drill"), drill],
+        [Sym("layers"), *layers],
+        [Sym("remove_unused_layers"), Sym("no")],
+    ]
+
+
 def _header(name: str, value: str, ref_at: float, val_at: float) -> list:
     return [
         [Sym("version"), FOOTPRINT_VERSION],
@@ -235,3 +265,56 @@ def wheel_footprint(geo: WheelGeometry) -> list:
 def wheel_footprint_text(geo: WheelGeometry) -> str:
     """Serialise a wheel footprint to `.kicad_mod` text (trailing newline)."""
     return widget_footprint_text(geo)
+
+
+# --------------------------------------------------------------------------- #
+# Trackpad footprint: a two-layer diamond matrix with via bridges
+# --------------------------------------------------------------------------- #
+# A trackpad net (Rx row / Tx column) spans many polygons across two layers, so
+# it cannot use the one-pad-per-electrode `widget_footprint`. Each net emits one
+# custom pad per F.Cu piece, one per B.Cu strap, and one thru-hole via pad per
+# bridge — all sharing the net's pad number, so KiCad reads them as one net and
+# the vias complete the cross-layer connection.
+def trackpad_footprint(geo: TrackpadGeometry) -> list:
+    """Build a footprint node for a trackpad from its :class:`TrackpadGeometry`."""
+    name = geo.params.name
+    minx, miny, maxx, maxy = geo.bounds
+    ref_y = miny - 1.5
+    val_y = maxy + 1.5
+    p = geo.params
+
+    fab = [_emit_outline(pr, layer="F.Fab", width=FAB_WIDTH) for pr in geo.fab_primitives]
+    courtyard = _emit_outline(
+        _expand_outline(geo.courtyard_outline, COURTYARD_MARGIN),
+        layer="F.CrtYd",
+        width=COURTYARD_WIDTH,
+    )
+
+    pads: list = []
+    for net in geo.nets:
+        for poly in net.fcu:
+            pts = polygon_points(poly)
+            pads.append(custom_polygon_pad(pts, number=net.pad_number,
+                                           at=anchor_point(poly), layer="F.Cu"))
+        for poly in net.bcu:
+            pts = polygon_points(poly)
+            pads.append(custom_polygon_pad(pts, number=net.pad_number,
+                                           at=anchor_point(poly), layer="B.Cu"))
+        for via in net.vias:
+            pads.append(via_pad(via.at, number=net.pad_number,
+                                 drill=p.via_drill, diameter=p.via_diameter))
+
+    return [
+        Sym("footprint"),
+        name,
+        *_header(name, name, ref_y, val_y),
+        *fab,
+        courtyard,
+        *pads,
+        [Sym("embedded_fonts"), Sym("no")],
+    ]
+
+
+def trackpad_footprint_text(geo: TrackpadGeometry) -> str:
+    """Serialise a trackpad footprint to `.kicad_mod` text (trailing newline)."""
+    return sexpr.dumps(trackpad_footprint(geo)) + "\n"

@@ -22,6 +22,7 @@ __all__ = [
     "ANCHOR_RADIUS",
     "round_corners",
     "anchor_point",
+    "polygon_points",
     "tip_relief_radius",
 ]
 
@@ -69,6 +70,18 @@ class Electrode:
         if coords and coords[0] == coords[-1]:
             coords = coords[:-1]
         return [(round(x, ROUND), round(y, ROUND)) for x, y in coords]
+
+
+def polygon_points(poly: Polygon) -> list[Point]:
+    """A polygon's exterior ring as rounded ``(x, y)`` vertices, no closing dup.
+
+    The standalone form of :attr:`Electrode.points`, reused by widgets (e.g. the
+    trackpad) whose copper is not a single :class:`Electrode`.
+    """
+    coords = list(poly.exterior.coords)
+    if coords and coords[0] == coords[-1]:
+        coords = coords[:-1]
+    return [(round(x, ROUND), round(y, ROUND)) for x, y in coords]
 
 
 def anchor_point(poly: Polygon) -> Point:

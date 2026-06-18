@@ -12,10 +12,10 @@ from __future__ import annotations
 from typing import Union
 
 from .. import __version__, sexpr
-from ..geometry import SliderGeometry, WheelGeometry
+from ..geometry import SliderGeometry, TrackpadGeometry, WheelGeometry
 from ..sexpr import Sym
 
-WidgetGeometry = Union[SliderGeometry, WheelGeometry]
+WidgetGeometry = Union[SliderGeometry, WheelGeometry, TrackpadGeometry]
 
 # KiCad 9.0 .kicad_sym S-expression format version (date token).
 SYMBOL_LIB_VERSION = 20241209
@@ -212,4 +212,18 @@ def wheel_symbol_lib(geo: WheelGeometry) -> list:
 
 def wheel_symbol_lib_text(geo: WheelGeometry) -> str:
     """Serialise a wheel symbol library to `.kicad_sym` text (trailing newline)."""
+    return widget_symbol_lib_text(geo)
+
+
+def trackpad_symbol(geo: TrackpadGeometry) -> list:
+    """Build a trackpad symbol — Rx pins left, Tx pins right (see :func:`widget_symbol`)."""
+    return widget_symbol(geo)
+
+
+def trackpad_symbol_lib(geo: TrackpadGeometry) -> list:
+    return _lib(widget_symbol(geo))
+
+
+def trackpad_symbol_lib_text(geo: TrackpadGeometry) -> str:
+    """Serialise a trackpad symbol library to `.kicad_sym` text (trailing newline)."""
     return widget_symbol_lib_text(geo)

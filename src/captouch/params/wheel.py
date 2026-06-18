@@ -184,6 +184,24 @@ class WheelParams:
         """Return a copy with ``segment_width`` / ``tooth_depth`` made explicit."""
         return replace(self, segment_width=self.width, tooth_depth=self.amplitude)
 
+    def fit_to_diameter(self, outer_diameter: float) -> "WheelParams":
+        """Return a copy whose ``num_segments`` best matches a target *outer_diameter*.
+
+        Sizes the wheel from its known overall diameter instead of a segment count.
+        Since ``outer_diameter = num_segments·pitch/π + ring_width`` (the mean radius
+        is derived from the arc pitch), solve for the count:
+        ``num_segments = round((outer_diameter − ring_width)·π / pitch)`` at the fixed
+        arc pitch ``W + A``, floored at the 3-segment minimum. The achieved
+        :attr:`outer_diameter` lands within about one pitch of the target.
+        """
+        if self.pitch <= 0:
+            raise WheelError(
+                f"cannot size from diameter: arc pitch (W + A) is {self.pitch:.3f} mm "
+                f"(<= 0); check finger_diameter / air_gap / segment_width"
+            )
+        n = round((outer_diameter - self.ring_width) * math.pi / self.pitch)
+        return replace(self, num_segments=max(3, n))
+
 
 def validate_wheel(p: WheelParams) -> WheelParams:
     """Validate *p*, raising :class:`WheelError` on any constraint violation.

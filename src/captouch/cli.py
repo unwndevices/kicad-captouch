@@ -30,6 +30,7 @@ from .params import (
     SliderParams,
     TrackpadError,
     TrackpadParams,
+    WheelError,
     WheelParams,
     WidgetParams,
     check_fab,
@@ -207,7 +208,12 @@ def _params_from_args(args: argparse.Namespace) -> SliderParams:
         overrides["relax_finger_constraint"] = True
     overrides.update(_support_overrides(args))
 
-    return replace(base, **overrides)
+    params = replace(base, **overrides)
+    if args.length is not None:
+        if args.num_segments is not None:
+            raise SliderError("size the slider with --length OR --num-segments, not both")
+        params = params.fit_to_length(args.length)
+    return params
 
 
 def _slider(args: argparse.Namespace) -> int:
@@ -246,6 +252,11 @@ def _slider(args: argparse.Namespace) -> int:
         f"W={params.width:.2f} A={params.air_gap:.2f} H={params.segment_height:.2f} mm, "
         f"extent {maxx - minx:.2f} x {maxy - miny:.2f} mm"
     )
+    if args.length is not None:
+        print(
+            f"    sized from length: target {args.length:.2f} mm → "
+            f"{params.total_length:.2f} mm ({params.num_segments} segments)"
+        )
     _report_support(geo)
     _report_fab(violations, args.fab_profile, strict=False)
     return 0
@@ -270,6 +281,12 @@ def _add_slider_parser(sub: argparse._SubParsersAction) -> None:
         help="electrode edge style",
     )
     p.add_argument("--num-segments", type=int, help="active electrode count (>=3)")
+    p.add_argument(
+        "--length",
+        type=float,
+        help="design from a target overall length (mm) instead of --num-segments: "
+        "derives the segment count from the pitch (mutually exclusive with --num-segments)",
+    )
     p.add_argument("--segment-width", type=float, help="segment width W (mm; derived if unset)")
     p.add_argument("--segment-height", type=float, help="segment height H (mm)")
     p.add_argument("--air-gap", type=float, help="inter-electrode gap A (mm)")
@@ -319,7 +336,12 @@ def _wheel_params_from_args(args: argparse.Namespace) -> WheelParams:
         overrides["relax_finger_constraint"] = True
     overrides.update(_support_overrides(args))
 
-    return replace(base, **overrides)
+    params = replace(base, **overrides)
+    if args.outer_diameter is not None:
+        if args.num_segments is not None:
+            raise WheelError("size the wheel with --outer-diameter OR --num-segments, not both")
+        params = params.fit_to_diameter(args.outer_diameter)
+    return params
 
 
 def _wheel(args: argparse.Namespace) -> int:
@@ -357,6 +379,11 @@ def _wheel(args: argparse.Namespace) -> int:
         f"OD={params.outer_diameter:.2f} mm, centre hole "
         f"{params.center_hole_diameter:.2f} mm"
     )
+    if args.outer_diameter is not None:
+        print(
+            f"    sized from diameter: target {args.outer_diameter:.2f} mm → "
+            f"{params.outer_diameter:.2f} mm ({params.num_segments} segments)"
+        )
     _report_support(geo)
     _report_fab(violations, args.fab_profile, strict=False)
     return 0
@@ -381,6 +408,12 @@ def _add_wheel_parser(sub: argparse._SubParsersAction) -> None:
         help="electrode boundary style",
     )
     p.add_argument("--num-segments", type=int, help="electrode count around the ring (>=3)")
+    p.add_argument(
+        "--outer-diameter",
+        type=float,
+        help="design from a target outer diameter (mm) instead of --num-segments: "
+        "derives the segment count from the pitch (mutually exclusive with --num-segments)",
+    )
     p.add_argument(
         "--segment-width", type=float, help="arc width W at mean radius (mm; derived if unset)"
     )

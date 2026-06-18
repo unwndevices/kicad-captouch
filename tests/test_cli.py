@@ -29,6 +29,34 @@ def test_slider_default_writes_files_and_exits_zero(tmp_path):
     assert (tmp_path / "S.kicad_sym").exists()
 
 
+def test_slider_length_sizes_segment_count(tmp_path, capsys):
+    rc = main(["slider", "--out", str(tmp_path), "--name", "S", "--length", "80"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "sized from length" in out and "target 80.00 mm" in out
+    assert (tmp_path / "S.kicad_mod").exists()
+
+
+def test_slider_length_conflicts_with_num_segments(tmp_path, capsys):
+    rc = main(["slider", "--out", str(tmp_path), "--length", "80", "--num-segments", "5"])
+    assert rc == 2
+    assert "not both" in capsys.readouterr().out
+
+
+def test_wheel_outer_diameter_sizes_segment_count(tmp_path, capsys):
+    rc = main(["wheel", "--out", str(tmp_path), "--name", "W", "--outer-diameter", "50"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "sized from diameter" in out and "target 50.00 mm" in out
+    assert (tmp_path / "W.kicad_mod").exists()
+
+
+def test_wheel_outer_diameter_conflicts_with_num_segments(tmp_path, capsys):
+    rc = main(["wheel", "--out", str(tmp_path), "--outer-diameter", "50", "--num-segments", "5"])
+    assert rc == 2
+    assert "not both" in capsys.readouterr().out
+
+
 def test_save_params_and_from_params_round_trip(tmp_path):
     out, regen, pj = tmp_path / "a", tmp_path / "b", tmp_path / "p.json"
     rc = main(

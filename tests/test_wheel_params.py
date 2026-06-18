@@ -40,6 +40,26 @@ def test_inner_outer_radius_from_ring_width():
     assert p.center_hole_diameter == pytest.approx(2 * p.inner_radius)
 
 
+@pytest.mark.parametrize("target", [30, 50, 80])
+def test_fit_to_diameter_lands_within_a_pitch(target):
+    # Design from an overall outer diameter: the achieved OD is within one (fixed)
+    # pitch of the target, and the result validates.
+    p = WheelParams().fit_to_diameter(target)
+    validate_wheel(p)
+    assert abs(p.outer_diameter - target) <= p.pitch + 1e-9
+
+
+def test_fit_to_diameter_floors_at_three_segments():
+    # A target at/below the ring width can't grow a ring; fall back to the minimum.
+    assert WheelParams().fit_to_diameter(1.0).num_segments == 3
+
+
+def test_fit_to_diameter_keeps_other_fields():
+    base = WheelParams(segment_shape="interdigitated", ring_width=4.0, name="W")
+    p = base.fit_to_diameter(60)
+    assert (p.segment_shape, p.ring_width, p.name) == ("interdigitated", 4.0, "W")
+
+
 def test_rectangular_amplitude_is_zero():
     assert WheelParams(segment_shape="rectangular").amplitude == 0.0
 

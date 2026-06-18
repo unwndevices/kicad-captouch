@@ -160,6 +160,25 @@ class SliderParams:
         """Return a copy with ``segment_width`` / ``tooth_depth`` made explicit."""
         return replace(self, segment_width=self.width, tooth_depth=self.amplitude)
 
+    def fit_to_length(self, length: float) -> "SliderParams":
+        """Return a copy whose ``num_segments`` best matches a target overall *length*.
+
+        Sizes the slider from its known overall length instead of a segment count:
+        solves ``length = m·pitch − A`` for the physical-segment count ``m`` (rounded
+        to the nearest whole segment, since the pitch ``W + A`` is fixed by the
+        finger/gap and is not stretched), then backs out the active count
+        ``num_segments = m − 2·end_dummies`` (floored at the 3-segment minimum). The
+        achieved :attr:`total_length` therefore lands within half a pitch of the
+        target.
+        """
+        if self.pitch <= 0:
+            raise SliderError(
+                f"cannot size from length: segment pitch (W + A) is {self.pitch:.3f} mm "
+                f"(<= 0); check finger_diameter / air_gap / segment_width"
+            )
+        physical = round((length + self.air_gap) / self.pitch)
+        return replace(self, num_segments=max(3, physical - 2 * self.end_dummies))
+
 
 def validate_slider(p: SliderParams) -> SliderParams:
     """Validate *p*, raising :class:`SliderError` on any constraint violation.

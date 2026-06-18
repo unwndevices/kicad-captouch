@@ -80,3 +80,23 @@ def test_derived_quantities():
     assert p.pitch == pytest.approx(7.5)
     # M*W + (M-1)*A
     assert p.total_length == pytest.approx(6 * 7 + 5 * 0.5)
+
+
+@pytest.mark.parametrize("target", [50, 80, 100, 37])
+def test_fit_to_length_lands_within_half_a_pitch(target):
+    # Design from an overall length: the achieved total_length is within half the
+    # (fixed) pitch of the target, and the result validates.
+    p = SliderParams().fit_to_length(target)
+    validate_slider(p)
+    assert abs(p.total_length - target) <= p.pitch / 2 + 1e-9
+
+
+def test_fit_to_length_floors_at_three_segments():
+    # A tiny target still yields the 3-segment interpolation minimum.
+    assert SliderParams().fit_to_length(1.0).num_segments == 3
+
+
+def test_fit_to_length_keeps_other_fields():
+    base = SliderParams(segment_shape="interdigitated", end_dummies=2, name="S")
+    p = base.fit_to_length(90)
+    assert (p.segment_shape, p.end_dummies, p.name) == ("interdigitated", 2, "S")

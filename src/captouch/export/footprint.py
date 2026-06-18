@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import Sequence, Union
 
 from .. import __version__, sexpr
-from ..geometry import SliderGeometry, TrackpadGeometry, WheelGeometry
+from ..geometry import SliderGeometry, SupportCopper, TrackpadGeometry, WheelGeometry, build_support
 from ..geometry._base import (
     ANCHOR_RADIUS,
     COURTYARD_MARGIN,
@@ -24,6 +24,8 @@ from ..geometry._base import (
     polygon_points,
     rounded_rect_points,
 )
+from ..geometry.zones import NETTIE_DIAMETER, NETTIE_DRILL
+from ..params.support import SupportParams
 from ..sexpr import Sym
 
 #: Any widget geometry the exporter can serialise (duck-typed: ``electrodes``,
@@ -91,12 +93,12 @@ def _fp_circle(center: Point, radius: float, *, layer: str, width: float) -> lis
     ]
 
 
-def _fp_poly(points: Sequence[Point], *, layer: str, width: float) -> list:
+def _fp_poly(points: Sequence[Point], *, layer: str, width: float, fill: bool = False) -> list:
     return [
         Sym("fp_poly"),
         _pts(points),
         [Sym("stroke"), [Sym("width"), width], [Sym("type"), Sym("default")]],
-        [Sym("fill"), Sym("no")],
+        [Sym("fill"), Sym("yes") if fill else Sym("no")],
         [Sym("layer"), layer],
     ]
 
@@ -124,7 +126,7 @@ def _expand_outline(prim: tuple, margin: float) -> tuple:
 
 
 def _emit_outline(prim: tuple, *, layer: str, width: float) -> list:
-    """Render a ``("rect"|"rrect"|"circle", …)`` primitive on *layer*."""
+    """Render a ``("rect"|"rrect"|"circle"|"poly", …)`` primitive on *layer*."""
     kind = prim[0]
     if kind == "rect":
         _, x1, y1, x2, y2 = prim
@@ -135,6 +137,8 @@ def _emit_outline(prim: tuple, *, layer: str, width: float) -> list:
     if kind == "circle":
         _, cx, cy, r = prim
         return _fp_circle((cx, cy), r, layer=layer, width=width)
+    if kind == "poly":  # a ready-made vertex ring (e.g. a grown support outline)
+        return _fp_poly(prim[1], layer=layer, width=width)
     raise ValueError(f"unknown outline primitive: {prim!r}")
 
 
@@ -201,6 +205,108 @@ def via_pad(
     ]
 
 
+# --------------------------------------------------------------------------- #
+# Support copper (Phase 8): hatched ground / guard ring as embedded zones
+# --------------------------------------------------------------------------- #
+# Emitted as KiCad `zone` objects inside the footprint and tied to a single GND
+# net via one thru-hole net-tie pad (+ a GND symbol pin). The zone *outline*,
+# net-tie position, and grown fab/courtyard come from geometry/zones.py; KiCad's
+# own zone filler does the hatch meshing and clearance-aware fill on the board.
+# NOTE: `kicad-cli pcb drc --refill-zones` does not refill footprint-embedded
+# zones (only board-level ones), so the DRC tests lift these zones to board level
+# to verify fill/clearance/connectivity; `fp export svg` covers "loads in KiCad".
+def _zone(
+    points: Sequence[Point],
+    *,
+    layer: str,
+    min_thickness: float,
+    hatch: tuple[float, float] | None = None,
+    connect_clearance: float = 0.25,
+) -> list:
+    """Build an embedded copper ``zone`` from a closed polygon outline.
+
+    *hatch* ``(line_width, gap)`` makes it a hatched (meshed) pour; ``None`` fills
+    solid. Emitted net-less (``net 0`` / ``net_name ""``) — the standard for a
+    library footprint zone: KiCad assigns its net when the footprint is placed
+    (tie it to the GND pin / net-tie pad's net). A baked ``net_name "GND"`` on a
+    ``net 0`` zone segfaults ``kicad-cli fp export svg`` (net-index / net-name
+    mismatch with no board net table), so we never bake a name. ``connect_pads
+    yes`` gives the net-tie pad a solid (not thermal) connection once tied.
+    """
+    fill: list = [Sym("fill"), Sym("yes")]
+    if hatch is not None:
+        fill.append([Sym("mode"), Sym("hatch")])
+    fill += [[Sym("thermal_gap"), 0.25], [Sym("thermal_bridge_width"), 0.25]]
+    if hatch is not None:
+        line_w, gap = hatch
+        fill += [
+            [Sym("hatch_thickness"), line_w],
+            [Sym("hatch_gap"), gap],
+            [Sym("hatch_orientation"), 0.0],
+            [Sym("smoothing"), Sym("none")],
+        ]
+    fill += [[Sym("island_removal_mode"), 1], [Sym("island_area_min"), 0.0]]
+    return [
+        Sym("zone"),
+        [Sym("net"), 0],
+        [Sym("net_name"), ""],
+        [Sym("layer"), layer],
+        [Sym("hatch"), Sym("edge"), 0.5],
+        [Sym("connect_pads"), Sym("yes"), [Sym("clearance"), connect_clearance]],
+        [Sym("min_thickness"), min_thickness],
+        fill,
+        [Sym("polygon"), _pts(points)],
+    ]
+
+
+def _support_extra_nodes(sc: SupportCopper, params: SupportParams) -> list:
+    """Zones + F.Mask aperture + GND net-tie pad for one widget's support copper."""
+    nodes: list = []
+    # Net-tie pad first (a real component pad → maps to the GND symbol pin).
+    number, at = sc.net_tie
+    nodes.append(via_pad(at, number=number, drill=NETTIE_DRILL, diameter=NETTIE_DIAMETER))
+    if sc.ground is not None:
+        gap = round(params.ground_hatch_pitch - params.ground_hatch_width, 6)
+        nodes.append(
+            _zone(
+                polygon_points(sc.ground),
+                layer="B.Cu",
+                hatch=(params.ground_hatch_width, gap),
+                min_thickness=min(0.25, params.ground_hatch_width),
+            )
+        )
+    if sc.guard is not None:
+        nodes.append(
+            _zone(
+                polygon_points(sc.guard),
+                layer="F.Cu",
+                min_thickness=min(0.25, params.guard_width),
+            )
+        )
+    if sc.mask_open is not None:  # expose the guard ring (no solder mask) — §4.6
+        nodes.append(_fp_poly(polygon_points(sc.mask_open), layer="F.Mask", width=0, fill=True))
+    return nodes
+
+
+def _fab_courtyard_nodes(geo: WidgetGeometry, sc: SupportCopper | None) -> tuple[list, list]:
+    """The F.Fab outline node(s) + the single F.CrtYd node.
+
+    Without support copper, the widget's own ``fab_primitives`` / ``courtyard_outline``
+    (byte-identical to before). With it, the grown outlines that enclose the zones.
+    """
+    if sc is None:
+        fab = [_emit_outline(p, layer="F.Fab", width=FAB_WIDTH) for p in geo.fab_primitives]
+        courtyard = _emit_outline(
+            _expand_outline(geo.courtyard_outline, COURTYARD_MARGIN),
+            layer="F.CrtYd",
+            width=COURTYARD_WIDTH,
+        )
+        return fab, courtyard
+    fab = [_emit_outline(p, layer="F.Fab", width=FAB_WIDTH) for p in sc.fab_outlines]
+    courtyard = _fp_poly(sc.courtyard_pts, layer="F.CrtYd", width=COURTYARD_WIDTH)
+    return fab, courtyard
+
+
 def _header(name: str, value: str, ref_at: float, val_at: float) -> list:
     return [
         [Sym("version"), FOOTPRINT_VERSION],
@@ -238,6 +344,17 @@ def _validate_pad(pad: list) -> None:
             raise FootprintError(f"pad {num!r} polygon has {n} point(s), need >= 3")
 
 
+def _validate_zone(zone: list) -> None:
+    for token in ("layer", "polygon"):
+        if sexpr.find(zone, token) is None:
+            raise FootprintError(f"zone missing ({token} …)")
+    poly = sexpr.find(zone, "polygon")
+    pts = sexpr.find(poly, "pts") if poly is not None else None
+    n = len(sexpr.find_all(pts, "xy")) if pts is not None else 0
+    if n < 3:
+        raise FootprintError(f"zone polygon has {n} point(s), need >= 3")
+
+
 def validate_footprint(node: list) -> list:
     """Check *node* is a well-formed footprint before serialisation.
 
@@ -258,6 +375,8 @@ def validate_footprint(node: list) -> list:
         raise FootprintError("footprint has no pads")
     for pad in pads:
         _validate_pad(pad)
+    for zone in sexpr.find_all(node, "zone"):  # optional support-copper zones
+        _validate_zone(zone)
     return node
 
 
@@ -301,13 +420,10 @@ def widget_footprint(geo: ElectrodeGeometry) -> list:
     ref_y = miny - 1.5
     val_y = maxy + 1.5
 
-    fab = [_emit_outline(p, layer="F.Fab", width=FAB_WIDTH) for p in geo.fab_primitives]
-    courtyard = _emit_outline(
-        _expand_outline(geo.courtyard_outline, COURTYARD_MARGIN),
-        layer="F.CrtYd",
-        width=COURTYARD_WIDTH,
-    )
+    sc = build_support(geo)
+    fab, courtyard = _fab_courtyard_nodes(geo, sc)
     pads = [custom_polygon_pad(e.points, number=e.pad_number, at=e.anchor) for e in geo.electrodes]
+    extra = _support_extra_nodes(sc, geo.params) if sc is not None else []
 
     return [
         Sym("footprint"),
@@ -316,6 +432,7 @@ def widget_footprint(geo: ElectrodeGeometry) -> list:
         *fab,
         courtyard,
         *pads,
+        *extra,
         [Sym("embedded_fonts"), Sym("no")],
     ]
 
@@ -362,12 +479,8 @@ def trackpad_footprint(geo: TrackpadGeometry) -> list:
     val_y = maxy + 1.5
     p = geo.params
 
-    fab = [_emit_outline(pr, layer="F.Fab", width=FAB_WIDTH) for pr in geo.fab_primitives]
-    courtyard = _emit_outline(
-        _expand_outline(geo.courtyard_outline, COURTYARD_MARGIN),
-        layer="F.CrtYd",
-        width=COURTYARD_WIDTH,
-    )
+    sc = build_support(geo)
+    fab, courtyard = _fab_courtyard_nodes(geo, sc)
 
     pads: list = []
     for net in geo.nets:
@@ -386,6 +499,8 @@ def trackpad_footprint(geo: TrackpadGeometry) -> list:
                 via_pad(via.at, number=net.pad_number, drill=p.via_drill, diameter=p.via_diameter)
             )
 
+    extra = _support_extra_nodes(sc, geo.params) if sc is not None else []
+
     return [
         Sym("footprint"),
         name,
@@ -393,6 +508,7 @@ def trackpad_footprint(geo: TrackpadGeometry) -> list:
         *fab,
         courtyard,
         *pads,
+        *extra,
         [Sym("embedded_fonts"), Sym("no")],
     ]
 

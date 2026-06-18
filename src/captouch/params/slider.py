@@ -19,6 +19,15 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from ._validate import require_finite
+from .support import (
+    GROUND_HATCH_PITCH,
+    GROUND_HATCH_WIDTH,
+    GROUND_MARGIN,
+    GUARD_BREAK,
+    GUARD_GAP,
+    GUARD_WIDTH,
+    validate_support,
+)
 
 __all__ = ["SliderParams", "SliderError", "validate_slider", "SLIDER_PRESETS"]
 
@@ -82,6 +91,11 @@ class SliderParams:
         Skip the Eq. 73 check (for deliberately non-standard geometry).
     name:
         Base name for the emitted footprint / symbol.
+    ground_hatch, ground_margin, ground_hatch_width, ground_hatch_pitch,
+    guard_ring, guard_width, guard_gap, guard_break, guard_mask_open:
+        Optional, **default-off** board-level support copper (a hatched ground
+        pour on B.Cu and/or a grounded guard / ESD ring on F.Cu). See
+        :mod:`captouch.params.support`.
     """
 
     num_segments: int = 4
@@ -97,6 +111,17 @@ class SliderParams:
     tip_radius: float = 0.15
     relax_finger_constraint: bool = False
     name: str = "CT_Slider"
+
+    # -- optional board-level support copper (default off) ----------------- #
+    ground_hatch: bool = False
+    ground_margin: float = GROUND_MARGIN
+    ground_hatch_width: float = GROUND_HATCH_WIDTH
+    ground_hatch_pitch: float = GROUND_HATCH_PITCH
+    guard_ring: bool = False
+    guard_width: float = GUARD_WIDTH
+    guard_gap: float = GUARD_GAP
+    guard_break: float = GUARD_BREAK
+    guard_mask_open: bool = True
 
     # -- resolved (derived) quantities ------------------------------------- #
     @property
@@ -142,6 +167,7 @@ def validate_slider(p: SliderParams) -> SliderParams:
     Returns *p* unchanged on success so it can be used inline.
     """
     require_finite(p, SliderError)
+    validate_support(p, SliderError)
     if p.segment_shape not in SEGMENT_SHAPES:
         raise SliderError(f"segment_shape must be one of {SEGMENT_SHAPES}, got {p.segment_shape!r}")
     if p.num_segments < 3:

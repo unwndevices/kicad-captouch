@@ -30,6 +30,16 @@ from .slider import (
     SliderParams,
     validate_slider,
 )
+from .support import (
+    GROUND_HATCH_PITCH,
+    GROUND_HATCH_WIDTH,
+    GROUND_MARGIN,
+    GUARD_BREAK,
+    GUARD_GAP,
+    GUARD_WIDTH,
+    has_support,
+    validate_support,
+)
 from .trackpad import (
     CLIP_MODES,
     DISABLE_AREA_FRACTION,
@@ -72,4 +82,12 @@ __all__ = [
     "FAB_PROFILES",
     "DEFAULT_PROFILE",
     "check_fab",
+    "has_support",
+    "validate_support",
+    "GROUND_HATCH_PITCH",
+    "GROUND_HATCH_WIDTH",
+    "GROUND_MARGIN",
+    "GUARD_BREAK",
+    "GUARD_GAP",
+    "GUARD_WIDTH",
 ]

@@ -36,6 +36,15 @@ from dataclasses import dataclass, replace
 
 from ._validate import require_finite
 from .slider import SliderError
+from .support import (
+    GROUND_HATCH_PITCH,
+    GROUND_HATCH_WIDTH,
+    GROUND_MARGIN,
+    GUARD_BREAK,
+    GUARD_GAP,
+    GUARD_WIDTH,
+    validate_support,
+)
 
 __all__ = [
     "TrackpadParams",
@@ -154,6 +163,10 @@ class TrackpadParams:
         for ``mask_shape == "rect"``.
     name:
         Base name for the emitted footprint / symbol.
+    ground_hatch, ground_margin, ground_hatch_width, ground_hatch_pitch,
+    guard_ring, guard_width, guard_gap, guard_break, guard_mask_open:
+        Optional, **default-off** board-level support copper (the guard / ESD ring
+        is most relevant to a trackpad — §4.6). See :mod:`captouch.params.support`.
     """
 
     num_rows: int = 4
@@ -169,6 +182,17 @@ class TrackpadParams:
     radius: float | None = None
     min_feature: float = 0.1
     name: str = "CT_Trackpad"
+
+    # -- optional board-level support copper (default off) ----------------- #
+    ground_hatch: bool = False
+    ground_margin: float = GROUND_MARGIN
+    ground_hatch_width: float = GROUND_HATCH_WIDTH
+    ground_hatch_pitch: float = GROUND_HATCH_PITCH
+    guard_ring: bool = False
+    guard_width: float = GUARD_WIDTH
+    guard_gap: float = GUARD_GAP
+    guard_break: float = GUARD_BREAK
+    guard_mask_open: bool = True
 
     # -- resolved (derived) quantities ------------------------------------- #
     @property
@@ -233,6 +257,7 @@ def validate_trackpad(p: TrackpadParams) -> TrackpadParams:
     Returns *p* unchanged on success so it can be used inline.
     """
     require_finite(p, TrackpadError)
+    validate_support(p, TrackpadError)
     for field, val in (("num_rows", p.num_rows), ("num_cols", p.num_cols)):
         if not MIN_LINES <= val <= MAX_LINES:
             raise TrackpadError(

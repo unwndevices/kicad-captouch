@@ -176,18 +176,34 @@ def _trackpad_features(p: TrackpadParams) -> list[_Feature]:
     ]
 
 
+def _support_features(p: SliderParams | WheelParams | TrackpadParams) -> list[_Feature]:
+    """Fab-critical copper widths from the optional support-copper features.
+
+    Only the enabled features contribute (off → no copper → nothing to check),
+    so default-off params produce no extra fab warnings.
+    """
+    feats: list[_Feature] = []
+    if p.ground_hatch:
+        feats.append(("ground hatch line width", WIDTH, p.ground_hatch_width))
+    if p.guard_ring:
+        feats.append(("guard ring width", WIDTH, p.guard_width))
+    return feats
+
+
 def fab_features(params: SliderParams | WheelParams | TrackpadParams) -> list[_Feature]:
     """Return the fab-critical dimensions a widget's *params* will produce.
 
     Dispatches on the params type. Each tuple is ``(label, kind, value_mm)``.
     """
     if isinstance(params, TrackpadParams):
-        return _trackpad_features(params)
-    if isinstance(params, WheelParams):
-        return _wheel_features(params)
-    if isinstance(params, SliderParams):
-        return _slider_features(params)
-    raise TypeError(f"unsupported params type for fab check: {type(params).__name__}")
+        base = _trackpad_features(params)
+    elif isinstance(params, WheelParams):
+        base = _wheel_features(params)
+    elif isinstance(params, SliderParams):
+        base = _slider_features(params)
+    else:
+        raise TypeError(f"unsupported params type for fab check: {type(params).__name__}")
+    return base + _support_features(params)
 
 
 def check_fab(

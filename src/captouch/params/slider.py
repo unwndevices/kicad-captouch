@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
+from ._validate import require_finite
+
 __all__ = ["SliderParams", "SliderError", "validate_slider", "SLIDER_PRESETS"]
 
 #: Allowed values for :attr:`SliderParams.segment_shape`.
@@ -139,6 +141,7 @@ def validate_slider(p: SliderParams) -> SliderParams:
 
     Returns *p* unchanged on success so it can be used inline.
     """
+    require_finite(p, SliderError)
     if p.segment_shape not in SEGMENT_SHAPES:
         raise SliderError(f"segment_shape must be one of {SEGMENT_SHAPES}, got {p.segment_shape!r}")
     if p.num_segments < 3:

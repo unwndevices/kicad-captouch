@@ -25,6 +25,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, replace
 
+from ._validate import require_finite
 from .slider import FINGER_CONSTRAINT_TOL, SEGMENT_SHAPES, SliderError
 
 __all__ = ["WheelParams", "WheelError", "validate_wheel", "WHEEL_PRESETS"]
@@ -165,6 +166,7 @@ def validate_wheel(p: WheelParams) -> WheelParams:
 
     Returns *p* unchanged on success so it can be used inline.
     """
+    require_finite(p, WheelError)
     if p.segment_shape not in SEGMENT_SHAPES:
         raise WheelError(f"segment_shape must be one of {SEGMENT_SHAPES}, got {p.segment_shape!r}")
     if p.num_segments < 3:

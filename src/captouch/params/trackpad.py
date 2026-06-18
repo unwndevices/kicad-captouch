@@ -34,6 +34,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, replace
 
+from ._validate import require_finite
 from .slider import SliderError
 
 __all__ = [
@@ -231,6 +232,7 @@ def validate_trackpad(p: TrackpadParams) -> TrackpadParams:
 
     Returns *p* unchanged on success so it can be used inline.
     """
+    require_finite(p, TrackpadError)
     for field, val in (("num_rows", p.num_rows), ("num_cols", p.num_cols)):
         if not MIN_LINES <= val <= MAX_LINES:
             raise TrackpadError(

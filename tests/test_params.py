@@ -63,6 +63,12 @@ def test_tip_radius_default_and_validation():
         validate_slider(SliderParams(tip_radius=-0.1))
 
 
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_float_rejected(bad):
+    with pytest.raises(SliderError, match="finite"):
+        validate_slider(SliderParams(air_gap=bad))
+
+
 @pytest.mark.parametrize("name", sorted(SLIDER_PRESETS))
 def test_presets_are_valid(name):
     validate_slider(SLIDER_PRESETS[name])

@@ -154,3 +154,9 @@ def test_circle_radius_bounds():
 def test_radius_rejected_unless_circle():
     with pytest.raises(TrackpadError, match="radius"):
         validate_trackpad(TrackpadParams(mask_shape="rect", radius=5.0))
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_float_rejected(bad):
+    with pytest.raises(TrackpadError, match="finite"):
+        validate_trackpad(TrackpadParams(diamond_pitch=bad))

@@ -125,3 +125,9 @@ def test_reject_tooth_depth_at_or_above_half_width():
                 tooth_depth=4.0,
             )
         )
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_float_rejected(bad):
+    with pytest.raises(WheelError, match="finite"):
+        validate_wheel(WheelParams(air_gap=bad))

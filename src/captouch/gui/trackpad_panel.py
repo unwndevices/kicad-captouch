@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..geometry import build_trackpad
-from ..params import MASK_SHAPES, TRACKPAD_PRESETS, TrackpadParams
+from ..params import CLIP_MODES, MASK_SHAPES, TRACKPAD_PRESETS, TrackpadParams
 from ._panel_base import PRESET_PLACEHOLDER as _PRESET_PLACEHOLDER
 from ._panel_base import PanelBase
 
@@ -87,6 +87,9 @@ class TrackpadPanel(PanelBase):
         self.mask_shape = QComboBox()
         self.mask_shape.addItems(MASK_SHAPES)
         self.mask_shape.currentTextChanged.connect(self._on_mask)
+        self.clip_mode = QComboBox()
+        self.clip_mode.addItems(CLIP_MODES)
+        self.clip_mode.currentTextChanged.connect(self._emit)
         self.corner_radius = self._dspin(0.5, 20.0, 0.5)
         self.corner_radius.setValue(2.0)
         self.radius, self.radius_auto = self._auto_dspin(1.0, 50.0, 0.5)
@@ -94,6 +97,7 @@ class TrackpadPanel(PanelBase):
         mask_box = QGroupBox("Mask")
         mf2 = QFormLayout(mask_box)
         mf2.addRow("Shape", self.mask_shape)
+        mf2.addRow("Clip mode", self.clip_mode)
         mf2.addRow("Corner radius (mm)", self.corner_radius)
         mf2.addRow("Radius (mm)", self._with_auto(self.radius, self.radius_auto))
         root.addWidget(mask_box)
@@ -107,6 +111,9 @@ class TrackpadPanel(PanelBase):
     def _on_mask(self, *args) -> None:
         """Enable corner_radius for rrect and the radius row for circle only."""
         shape = self.mask_shape.currentText()
+        # clip_mode (inscribe/conform) only changes a curved mask; a rect clips
+        # nothing, so the choice is inert there.
+        self.clip_mode.setEnabled(shape != "rect")
         self.corner_radius.setEnabled(shape == "rrect")
         self.radius_auto.setEnabled(shape == "circle")
         self.radius.setEnabled(shape == "circle" and not self.radius_auto.isChecked())
@@ -133,6 +140,7 @@ class TrackpadPanel(PanelBase):
             via_drill=self.via_drill.value(),
             via_diameter=self.via_diameter.value(),
             mask_shape=shape,
+            clip_mode=self.clip_mode.currentText(),
             name=self.name.text() or "CT_Trackpad",
         )
         # corner_radius / radius are only valid for their own shape (validation
@@ -156,6 +164,7 @@ class TrackpadPanel(PanelBase):
             self.via_drill.setValue(p.via_drill)
             self.via_diameter.setValue(p.via_diameter)
             self.mask_shape.setCurrentText(p.mask_shape)
+            self.clip_mode.setCurrentText(p.clip_mode)
             if p.corner_radius:
                 self.corner_radius.setValue(p.corner_radius)
             self.radius_auto.setChecked(p.radius is None)

@@ -58,12 +58,17 @@ def _summary(geo: WidgetGeometry) -> str:
     p = geo.params
     if isinstance(geo, TrackpadGeometry):
         minx, miny, maxx, maxy = geo.bounds
-        return (
+        summary = (
             f"mutual-cap trackpad — {p.num_rows}×{p.num_cols} diamonds "
             f"({len(geo.rx_nets)} Rx + {len(geo.tx_nets)} Tx, {p.num_nodes} nodes) · "
             f"pitch {p.diamond_pitch:.2f} gap {p.diamond_gap:.2f} mm · "
             f"extent {maxx - minx:.2f} × {maxy - miny:.2f} mm"
         )
+        partials = geo.partial_channels()
+        if partials:  # a curved mask shrank some edge channels (Azoteq AZD068 §6)
+            names = ", ".join(name for name, _ in partials)
+            summary += f" · {len(partials)} partial ch <50%: {names} (disable in fw)"
+        return summary
     if isinstance(geo, WheelGeometry):
         return (
             f"{p.segment_shape} wheel — {len(geo.electrodes)} electrodes, "

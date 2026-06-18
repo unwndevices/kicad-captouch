@@ -299,6 +299,31 @@ def test_trackpad_panel_roundtrips_circle_params(qapp):
     assert got.mask_shape == "circle" and got.radius == 9.0
 
 
+def test_trackpad_panel_clip_mode_drives_param_and_enable_state(qapp):
+    from captouch.gui.trackpad_panel import TrackpadPanel
+
+    panel = TrackpadPanel()
+    panel.set_params(TrackpadParams(num_rows=6, num_cols=6))
+    assert panel.params().clip_mode == "inscribe"
+    assert not panel.clip_mode.isEnabled()  # inert for the rect mask
+
+    panel.mask_shape.setCurrentText("circle")
+    assert panel.clip_mode.isEnabled()
+    panel.clip_mode.setCurrentText("conform")
+    p = panel.params()
+    assert p.mask_shape == "circle" and p.clip_mode == "conform"
+    assert build_trackpad(p).partial_channels()  # cut rim → flagged channels
+
+
+def test_trackpad_panel_roundtrips_conform(qapp):
+    from captouch.gui.trackpad_panel import TrackpadPanel
+
+    panel = TrackpadPanel()
+    panel.set_params(TrackpadParams(num_rows=5, num_cols=5,
+                                    mask_shape="circle", clip_mode="conform"))
+    assert panel.params().clip_mode == "conform"
+
+
 @pytest.mark.parametrize("shape,kw", [("rrect", {"corner_radius": 2.0}), ("circle", {})])
 def test_trackpad_masked_outline_renders(qapp, shape, kw):
     from captouch.gui.preview import PreviewView

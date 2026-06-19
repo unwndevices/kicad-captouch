@@ -15,9 +15,11 @@ import pytest
 
 from captouch.export import footprint, symbol
 from captouch.geometry import (
+    KeypadGeometry,
     MutualSliderGeometry,
     TrackpadGeometry,
     WheelGeometry,
+    build_keypad,
     build_mutual_slider,
     build_slider,
     build_trackpad,
@@ -25,10 +27,12 @@ from captouch.geometry import (
 )
 from captouch.geometry._base import polygon_points
 from captouch.params import (
+    KEYPAD_PRESETS,
     MUTUAL_SLIDER_PRESETS,
     SLIDER_PRESETS,
     TRACKPAD_PRESETS,
     WHEEL_PRESETS,
+    KeypadParams,
     MutualSliderParams,
     SliderParams,
     TrackpadParams,
@@ -525,6 +529,88 @@ def test_load_params_switches_to_mutual_slider(qapp):
     win.load_params(MutualSliderParams(num_segments=6, sense_rows=1, name="CT_MS"))
     assert isinstance(win._geo, MutualSliderGeometry)  # selector switched
     assert win.panel.params().num_segments == 6
+
+
+# --------------------------------------------------------------------------- #
+# widget switcher — keypad
+# --------------------------------------------------------------------------- #
+def test_keypad_panel_defaults_build_valid_geometry(qapp):
+    from captouch.gui.keypad_panel import KeypadPanel
+
+    panel = KeypadPanel()
+    geo = build_keypad(panel.params())  # must not raise
+    assert len(geo.electrodes) == KeypadParams().num_buttons
+
+
+@pytest.mark.parametrize("key", sorted(KEYPAD_PRESETS))
+def test_keypad_preset_roundtrips_through_panel(qapp, key):
+    from captouch.gui.keypad_panel import KeypadPanel
+
+    preset = KEYPAD_PRESETS[key]
+    panel = KeypadPanel()
+    panel.set_params(preset)
+    got = panel.params()
+    assert (got.num_rows, got.num_cols) == (preset.num_rows, preset.num_cols)
+    assert got.button_shape == preset.button_shape
+    assert got.button_size == pytest.approx(preset.button_size)
+    assert got.gap == pytest.approx(preset.gap)
+    build_keypad(got)  # the loaded params still build
+
+
+def test_switch_to_keypad_builds_geometry(qapp):
+    from captouch.gui.app import MainWindow
+    from captouch.gui.keypad_panel import KeypadPanel
+
+    win = MainWindow()
+    win._on_widget_changed(4)  # 0 Slider, 1 Wheel, 2 Trackpad, 3 Mutual slider, 4 Keypad
+    assert isinstance(win.panel, KeypadPanel)
+    assert isinstance(win.preview.geometry_model, KeypadGeometry)
+    assert "keypad" in win._status.text()
+
+
+def test_keypad_panel_circle_shape_disables_corner_radius(qapp):
+    from captouch.gui.keypad_panel import KeypadPanel
+
+    panel = KeypadPanel()
+    panel.button_shape.setCurrentText("rect")
+    assert panel.corner_radius.isEnabled()
+    panel.button_shape.setCurrentText("circle")
+    assert not panel.corner_radius.isEnabled()  # meaningless for a round button
+
+
+def test_keypad_preview_matches_geometry(qapp):
+    from captouch.gui.app import MainWindow
+
+    win = MainWindow()
+    win._on_widget_changed(4)
+    win.panel.set_params(KeypadParams(num_rows=2, num_cols=3, button_shape="diamond"))
+    win._rebuild()
+    geo = win.preview.geometry_model
+    for e in geo.electrodes:
+        assert win.preview.electrode_polygon_points(e.pad_number) == e.points
+
+
+def test_keypad_export_matches_preview(qapp, tmp_path):
+    from captouch.gui.app import MainWindow
+
+    win = MainWindow()
+    win._on_widget_changed(4)
+    win.panel.set_params(KEYPAD_PRESETS["numeric"])
+    win._rebuild()
+    geo = win.preview.geometry_model
+
+    fp_path, sym_path = win.export_to(tmp_path)
+    assert fp_path.read_text() == footprint.keypad_footprint_text(geo)
+    assert sym_path.read_text() == symbol.keypad_symbol_lib_text(geo)
+
+
+def test_load_params_switches_to_keypad(qapp):
+    from captouch.gui.app import MainWindow
+
+    win = MainWindow()  # starts on the slider panel
+    win.load_params(KeypadParams(num_rows=2, num_cols=2, button_shape="circle", name="CT_KP"))
+    assert isinstance(win._geo, KeypadGeometry)  # selector switched
+    assert win.panel.params().button_shape == "circle"
 
 
 # --------------------------------------------------------------------------- #

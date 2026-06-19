@@ -24,6 +24,7 @@ from PySide6.QtWidgets import QGraphicsPolygonItem, QGraphicsScene, QGraphicsVie
 from ..export.footprint import COURTYARD_MARGIN
 from ..geometry import (
     Electrode,
+    KeypadGeometry,
     SliderGeometry,
     SupportCopper,
     TrackpadGeometry,
@@ -33,7 +34,7 @@ from ..geometry import (
 from ..geometry._base import polygon_points, rounded_rect_points
 from ..geometry.zones import NETTIE_DIAMETER, NETTIE_DRILL
 
-WidgetGeometry = Union[SliderGeometry, WheelGeometry, TrackpadGeometry]
+WidgetGeometry = Union[SliderGeometry, WheelGeometry, TrackpadGeometry, KeypadGeometry]
 
 __all__ = ["PreviewView", "LAYERS"]
 

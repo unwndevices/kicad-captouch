@@ -30,11 +30,12 @@ from PySide6.QtWidgets import (
 )
 
 from ..export import footprint, symbol
-from ..geometry import MutualSliderGeometry, TrackpadGeometry, WheelGeometry
+from ..geometry import KeypadGeometry, MutualSliderGeometry, TrackpadGeometry, WheelGeometry
 from ..geometry._base import GeometryError
 from ..params import (
     DEFAULT_PROFILE,
     FAB_PROFILES,
+    KeypadParams,
     MutualSliderParams,
     SliderError,
     TrackpadParams,
@@ -44,6 +45,7 @@ from ..params import (
     params_from_json,
     params_to_json,
 )
+from .keypad_panel import KeypadPanel
 from .mutual_slider_panel import MutualSliderPanel
 from .panel import ParamPanel
 from .preview import LAYERS, PreviewView, WidgetGeometry
@@ -67,13 +69,14 @@ _ADVICE_STYLE = (
     "border-radius: 6px; padding: 6px 10px; }"
 )
 
-# (label, panel factory) per selectable widget type. Mutual slider is appended
-# (index 3) so the existing widget-switcher indices stay stable.
+# (label, panel factory) per selectable widget type. New widgets are appended
+# (keypad index 4) so the existing widget-switcher indices stay stable.
 _WIDGETS = (
     ("Slider", ParamPanel),
     ("Wheel", WheelPanel),
     ("Trackpad", TrackpadPanel),
     ("Mutual slider", MutualSliderPanel),
+    ("Keypad", KeypadPanel),
 )
 
 
@@ -110,6 +113,14 @@ def _summary(geo: WidgetGeometry) -> str:
             f"{wp.segment_shape} wheel — {len(geo.electrodes)} electrodes, "
             f"W={wp.width:.2f} A={wp.air_gap:.2f} ring={wp.ring_width:.2f} mm · "
             f"OD {wp.outer_diameter:.2f} mm, centre hole {wp.center_hole_diameter:.2f} mm"
+        )
+    if isinstance(geo, KeypadGeometry):
+        kp = geo.params
+        minx, miny, maxx, maxy = geo.bounds
+        return (
+            f"{kp.button_shape} keypad — {kp.num_rows}×{kp.num_cols} buttons "
+            f"({kp.num_buttons} keys, {kp.num_pins} pins) · size {kp.button_size:.2f} "
+            f"gap {kp.gap:.2f} mm · extent {maxx - minx:.2f} × {maxy - miny:.2f} mm"
         )
     sp = geo.params
     minx, miny, maxx, maxy = geo.bounds
@@ -365,6 +376,8 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _widget_index(p) -> int:
         """Selector index (matching _WIDGETS order) for a params object."""
+        if isinstance(p, KeypadParams):
+            return 4
         if isinstance(p, MutualSliderParams):
             return 3
         if isinstance(p, TrackpadParams):

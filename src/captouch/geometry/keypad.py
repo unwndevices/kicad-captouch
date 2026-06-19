@@ -32,9 +32,11 @@ from ..params import KeypadParams, validate_keypad
 from ._base import (
     ROUND,
     Electrode,
-    Point as XY,
     anchor_point,
     round_corners,
+)
+from ._base import (
+    Point as XY,
 )
 
 __all__ = ["KeypadGeometry", "build_keypad"]

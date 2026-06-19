@@ -38,6 +38,7 @@ captouch mutual-slider --num-segments 6   # 6-node mutual-cap (CSX) diamond slid
 captouch wheel  --preset st_rotary    # 5-segment rotary wheel
 captouch trackpad --num-rows 4 --num-cols 5   # 4×5 mutual-cap diamond pad
 captouch trackpad --panel-width 300 --panel-height 200  # or size from the overall pad
+captouch keypad --num-rows 4 --num-cols 3     # 4×3 discrete self-cap button grid
 captouch gui                          # live-preview desktop app
 ```
 
@@ -46,9 +47,9 @@ Each command writes two files into the output directory (default `./examples`):
 
 ## The CLI
 
-Four generator subcommands — `slider`, `mutual-slider`, `wheel`, `trackpad` — plus
-`from-params` (regenerate from a saved parameter set) and `gui`. Run any with
-`--help` for the full parameter list.
+Five generator subcommands — `slider`, `mutual-slider`, `wheel`, `trackpad`,
+`keypad` — plus `from-params` (regenerate from a saved parameter set) and `gui`.
+Run any with `--help` for the full parameter list.
 
 ### Options shared by every generator
 
@@ -182,6 +183,30 @@ strip by its overall `--length` instead of `--num-segments` (see
 [Design from overall size](#design-from-overall-size)). The symbol records the
 **2 kΩ** mutual-cap series-R recommendation; the pins are `Rx1` (sense, left) and
 `Tx1…TxN` (drive, right).
+
+### Keypad
+
+```sh
+captouch keypad --num-rows 4 --num-cols 3                 # a 4×3 button grid
+captouch keypad --preset numeric                          # telephone/calculator layout
+captouch keypad --preset round                            # round macro pad
+captouch keypad --num-rows 2 --num-cols 4 --button-shape diamond --button-size 9
+```
+
+A **keypad** is an `R×C` array of **discrete self-capacitance buttons** — each
+button is its own sensed electrode on its own pin (no interpolation, no shared
+rows/columns; that is the [trackpad](#trackpad)'s job), so the footprint is one
+custom pad per button and the symbol one `K1…KN` pin per button, numbered
+row-major (top row first, left to right). It is single-layer and needs no vias.
+
+Keypad-specific: `--num-rows`/`--num-cols` (buttons per axis, ≥ 1), `--button-shape`
+`{rect,circle,diamond}` (square / round / square-rotated-45°), `--button-size` (the
+square side / circle diameter / diamond diagonal), `--gap` (button-to-button
+edge-to-edge separation), and `--corner-radius` (ESD rounding for rect/diamond).
+The default `--gap` is **4 mm** — the Microchip AN2934 §1.2.2 self-cap separation
+rule "4 mm + cover" for a bare board; when an `--overlay-thickness` is given, the
+advisory channel flags a gap below `4 mm + overlay` or a button below `3× overlay`
+(TI rule). The symbol records the **560 Ω** self-cap series-R recommendation.
 
 ### Design from overall size
 
@@ -360,14 +385,17 @@ enforced as a hard error regardless of profile.)
 captouch gui            # or: captouch-gui
 ```
 
-- A **Widget** selector swaps the slider / wheel / trackpad / mutual-slider
-  parameter panel.
+- A **Widget** selector swaps the slider / wheel / trackpad / mutual-slider /
+  keypad parameter panel.
 - A **Preset** menu loads vendor starting points into the form.
-- Each panel has a **"Design from overall size"** checkbox (length / outer diameter
-  / panel width×height) that derives the element count from the pitch and shows it
-  live — the same sizing as the CLI `--length` / `--outer-diameter` / `--panel-*`.
+- Each sizing-capable panel has a **"Design from overall size"** checkbox (length /
+  outer diameter / panel width×height) that derives the element count from the pitch
+  and shows it live — the same sizing as the CLI `--length` / `--outer-diameter` /
+  `--panel-*`.
 - The mutual-slider panel combines that length sizing with the diamond / bridge /
   via knobs and a **sense rows** (1 single / 2 dual) control.
+- The keypad panel has a grid size, a button **shape** (rect / circle / diamond),
+  size, separation, and corner-radius (disabled for a circle).
 - The trackpad panel has a **Mask** group — shape (rect / rrect / circle), a
   **clip mode** (inscribe / conform, active only for a curved mask), and a
   corner-radius (rrect) or radius (circle; *Auto* = inscribed) control — that

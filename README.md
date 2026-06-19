@@ -1,7 +1,8 @@
 # kicad-captouch
 
 A standalone, vendor-agnostic desktop tool that **parametrically generates capacitive-touch
-interface footprints** — self- and mutual-cap sliders, wheels, and XY diamond pads — for KiCad, with a live visual
+interface footprints** — self- and mutual-cap sliders, wheels, XY diamond pads, and button keypads —
+for KiCad, with a live visual
 preview. Each widget is emitted as a ready-to-use **footprint (`.kicad_mod`)** plus a matching
 **schematic symbol (`.kicad_sym`)**, written directly as KiCad S-expressions (no dependency on
 KiCad's in-flux scripting API).
@@ -13,7 +14,7 @@ roadmap, and the companion research in [`docs/`](docs).
 
 Sliders, wheels, **and XY diamond trackpads** are done, with a desktop GUI, **vendor-pinned presets**,
 **fab-rule guards**, and a **standalone binary**. The engine — `params` → `geometry` (Shapely) →
-`export` — generates four widgets:
+`export` — generates five widgets:
 
 - **Linear sliders** — a row of rectangular / chevron / interdigitated electrodes with grounded
   end-dummy segments.
@@ -29,8 +30,12 @@ Sliders, wheels, **and XY diamond trackpads** are done, with a desktop GUI, **ve
   at every crossing, with **half-diamond edge termination**. `R + C` pins resolve `R·C` interpolated
   nodes. The diamond half-diagonal is derived from the pitch and gap so every facing edge keeps the
   nominal clearance.
+- **Button keypads** — an `R×C` grid of **discrete self-cap buttons** (rect / circle / diamond),
+  each its own electrode on its own pin (`R·C` pads / `K1…KN` pins), single-layer. The default
+  4 mm button separation follows the Microchip self-cap rule; an overlay flags under-sized or
+  under-spaced buttons via the advisory channel.
 
-Each widget can be **designed from its overall size** instead of an element count — a target slider
+Most widgets can be **designed from their overall size** instead of an element count — a target slider
 length, wheel outer diameter, or trackpad panel width×height — and the generator derives the count
 from the pitch (trimming or insetting the trackpad lattice to the exact outline).
 
@@ -39,7 +44,7 @@ footprint plus a matching symbol whose pins map 1:1 to the pads, in the **KiCad 
 (footprint `version 20241229`, symbol lib `version 20241209`) that both KiCad 9 and 10 accept — all
 **DRC-clean** in KiCad 10 (the trackpad's via bridges verified connected via DRC, not just assumed).
 
-The **PySide6 GUI** wraps the same engine: a slider/wheel/trackpad/mutual-slider selector swaps a parameter panel
+The **PySide6 GUI** wraps the same engine: a slider/wheel/trackpad/mutual-slider/keypad selector swaps a parameter panel
 (with vendor presets) that drives a live `QGraphicsView` preview (zoom/pan, layer toggles — including
 distinct `F.Cu`, `B.Cu`, and via layers for the trackpad) rendering the *same* geometry the exporters
 serialise — so the preview is byte-faithful to the exported copper — plus one-click export of the
@@ -163,6 +168,31 @@ needs **two copper layers**. Note the connecting necks pinch tighter than the bu
 known overall size, give `--panel-width`/`--panel-height` instead of the counts: the row/column
 counts are derived from the pitch and the lattice is trimmed (overflow) or inset (underflow) to the
 exact outline.
+
+### Generate a keypad
+
+```sh
+# defaults: 3x4 grid of 10 mm square buttons, 4 mm apart
+captouch keypad --out examples --name CT_Keypad
+
+# from a vendor preset, overriding the grid size
+captouch keypad --preset numeric --num-rows 4 --num-cols 4
+
+# round or diamond buttons
+captouch keypad --num-rows 2 --num-cols 4 --button-shape diamond --button-size 9
+
+captouch keypad --list-presets        # numeric / round / compact
+captouch keypad --help                # full parameter list
+```
+
+A **keypad** is an `R×C` array of **discrete self-cap buttons** — each button its own electrode on
+its own pin (no interpolation, no shared rows/columns; that is the trackpad's job), so the footprint
+is one custom pad per button and the symbol one `K1…KN` pin per button (numbered row-major). It is
+single-layer and needs no vias. Keypad parameters: `--num-rows` / `--num-cols`, `--button-shape`
+`{rect,circle,diamond}`, `--button-size` (square side / circle diameter / diamond diagonal), `--gap`
+(button-to-button separation, default 4 mm — the Microchip self-cap rule), and `--corner-radius`
+(ESD rounding). With `--overlay-thickness` set, the advisory channel flags a button below `3×overlay`
+or a gap below `4 mm + overlay`. The symbol records the **560 Ω** self-cap series-R note.
 
 ### Fab-rule guards
 

@@ -44,6 +44,21 @@ def test_builds_below_floor_and_above_old_caps(rows, cols):
     assert all(n.fcu for n in geo.nets)  # every line carries copper
 
 
+def test_min_lines_guards_the_two_line_floor_by_default():
+    # The default floor rejects a single sense row (that is a 1-D slider, not a pad).
+    with pytest.raises(TrackpadError, match=">= 2"):
+        build_trackpad(TrackpadParams(num_rows=1, num_cols=5))
+
+
+def test_min_lines_one_allows_a_single_sense_row():
+    # The mutual-cap slider reuses this builder with min_lines=1: one continuous Rx
+    # row crossed by num_cols bridged Tx columns. Every Tx column still bridges.
+    geo = build_trackpad(TrackpadParams(num_rows=1, num_cols=5), min_lines=1)
+    assert len(geo.rx_nets) == 1 and len(geo.tx_nets) == 5
+    assert len(geo.rx_nets[0].fcu) == 1  # the sense row is one connected F.Cu piece
+    assert all(t.vias for t in geo.tx_nets)  # each Tx column is via-bridged
+
+
 def _copper_bounds(geo):
     cu = unary_union([g for n in geo.nets for g in n.fcu] + [g for n in geo.nets for g in n.bcu])
     return cu.bounds

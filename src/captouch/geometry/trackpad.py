@@ -31,6 +31,7 @@ from shapely.ops import unary_union
 
 from ..params import (
     DISABLE_AREA_FRACTION,
+    MIN_LINES,
     TrackpadError,
     TrackpadParams,
     validate_trackpad,
@@ -221,9 +222,14 @@ def _mask_clip(params: TrackpadParams, x0: float, y0: float, x1: float, y1: floa
     return box(x0, y0, x1, y1)
 
 
-def build_trackpad(params: TrackpadParams) -> TrackpadGeometry:
-    """Build a :class:`TrackpadGeometry` from validated *params*."""
-    validate_trackpad(params)
+def build_trackpad(params: TrackpadParams, *, min_lines: int = MIN_LINES) -> TrackpadGeometry:
+    """Build a :class:`TrackpadGeometry` from validated *params*.
+
+    *min_lines* is forwarded to :func:`validate_trackpad`: it defaults to the
+    2-line XY-matrix floor, and the 1-D mutual-cap slider passes ``min_lines=1`` to
+    reuse this exact builder with a single continuous sense row.
+    """
+    validate_trackpad(params, min_lines=min_lines)
 
     P = params.diamond_pitch
     d = params.half_diag

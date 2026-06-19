@@ -26,9 +26,13 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from .mutual_slider import MutualSliderParams
 from .slider import SliderParams
 from .trackpad import TrackpadParams
 from .wheel import WheelParams
+
+#: Every widget params type the fab guards accept.
+_WidgetParams = SliderParams | WheelParams | TrackpadParams | MutualSliderParams
 
 __all__ = [
     "FabRules",
@@ -176,7 +180,7 @@ def _trackpad_features(p: TrackpadParams) -> list[_Feature]:
     ]
 
 
-def _support_features(p: SliderParams | WheelParams | TrackpadParams) -> list[_Feature]:
+def _support_features(p: _WidgetParams) -> list[_Feature]:
     """Fab-critical copper widths from the optional support-copper features.
 
     Only the enabled features contribute (off → no copper → nothing to check),
@@ -190,13 +194,17 @@ def _support_features(p: SliderParams | WheelParams | TrackpadParams) -> list[_F
     return feats
 
 
-def fab_features(params: SliderParams | WheelParams | TrackpadParams) -> list[_Feature]:
+def fab_features(params: _WidgetParams) -> list[_Feature]:
     """Return the fab-critical dimensions a widget's *params* will produce.
 
     Dispatches on the params type. Each tuple is ``(label, kind, value_mm)``.
     """
     if isinstance(params, TrackpadParams):
         base = _trackpad_features(params)
+    elif isinstance(params, MutualSliderParams):
+        # A mutual slider's tightest features are the trackpad's (it is a 1-row
+        # diamond matrix): diamond gap, neck pinch, bridge width, via drill/annular.
+        base = _trackpad_features(params.to_trackpad())
     elif isinstance(params, WheelParams):
         base = _wheel_features(params)
     elif isinstance(params, SliderParams):
@@ -207,7 +215,7 @@ def fab_features(params: SliderParams | WheelParams | TrackpadParams) -> list[_F
 
 
 def check_fab(
-    params: SliderParams | WheelParams | TrackpadParams,
+    params: _WidgetParams,
     rules: FabRules | str = DEFAULT_PROFILE,
 ) -> list[FabViolation]:
     """Check *params* against a fab profile, returning every violation.

@@ -23,6 +23,14 @@ from .fab import (
     FabViolation,
     check_fab,
 )
+from .mutual_slider import (
+    MAX_SENSE_ROWS,
+    MIN_SEGMENTS,
+    MUTUAL_SLIDER_PRESETS,
+    MutualSliderError,
+    MutualSliderParams,
+    validate_mutual_slider,
+)
 from .sensing import (
     BOARD_THICKNESS,
     OVERLAY_ER,
@@ -56,6 +64,7 @@ from .trackpad import (
     CLIP_MODES,
     DISABLE_AREA_FRACTION,
     MASK_SHAPES,
+    MIN_LINES,
     TRACKPAD_PRESETS,
     TrackpadError,
     TrackpadParams,
@@ -78,6 +87,12 @@ __all__ = [
     "SliderError",
     "validate_slider",
     "SLIDER_PRESETS",
+    "MutualSliderParams",
+    "MutualSliderError",
+    "validate_mutual_slider",
+    "MUTUAL_SLIDER_PRESETS",
+    "MIN_SEGMENTS",
+    "MAX_SENSE_ROWS",
     "WheelParams",
     "WheelError",
     "validate_wheel",
@@ -89,6 +104,7 @@ __all__ = [
     "MASK_SHAPES",
     "CLIP_MODES",
     "DISABLE_AREA_FRACTION",
+    "MIN_LINES",
     "FabRules",
     "FabViolation",
     "FAB_PROFILES",

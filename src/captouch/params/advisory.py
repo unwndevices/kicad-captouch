@@ -34,6 +34,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .mutual_slider import MutualSliderParams
 from .sensing import has_overlay
 from .slider import SliderParams
 from .trackpad import TrackpadParams
@@ -86,7 +87,7 @@ class Advisory:
     blocks: bool = False
 
 
-WidgetParams = SliderParams | WheelParams | TrackpadParams
+WidgetParams = SliderParams | WheelParams | TrackpadParams | MutualSliderParams
 
 
 # --------------------------------------------------------------------------- #
@@ -95,10 +96,10 @@ WidgetParams = SliderParams | WheelParams | TrackpadParams
 def recommended_series_r(params: WidgetParams) -> tuple[str, str]:
     """Return ``(value, sensing-mode label)`` for the recommended series resistor.
 
-    Self-cap (slider/wheel) → 560 Ω; mutual-cap (trackpad) → 2 kΩ (Infineon
-    AN85951; guidelines §5.5).
+    Self-cap (slider/wheel) → 560 Ω; mutual-cap (trackpad, mutual slider) → 2 kΩ
+    (Infineon AN85951; guidelines §5.5).
     """
-    if isinstance(params, TrackpadParams):
+    if isinstance(params, (TrackpadParams, MutualSliderParams)):
         return SERIES_R_MUTUAL, "mutual-cap (CSX)"
     return SERIES_R_SELF, "self-cap (CSD)"
 
@@ -235,6 +236,10 @@ def check_advisories(params: WidgetParams) -> list[Advisory]:
     """
     if isinstance(params, TrackpadParams):
         return _trackpad_advisories(params)
+    if isinstance(params, MutualSliderParams):
+        # A mutual-cap slider is electrically a 1-row trackpad; reuse the mutual
+        # advisory treatment (2 kΩ series-R, mutual Cp budget, mutual overlay window).
+        return _trackpad_advisories(params.to_trackpad())
     if isinstance(params, WheelParams):
         return _self_cap_advisories(
             params, params.ring_width, "ring width", params.width * params.ring_width

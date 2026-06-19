@@ -321,17 +321,22 @@ class TrackpadParams:
         )
 
 
-def validate_trackpad(p: TrackpadParams) -> TrackpadParams:
+def validate_trackpad(p: TrackpadParams, *, min_lines: int = MIN_LINES) -> TrackpadParams:
     """Validate *p*, raising :class:`TrackpadError` on any constraint violation.
 
     Returns *p* unchanged on success so it can be used inline.
+
+    *min_lines* is the per-axis line floor. It defaults to :data:`MIN_LINES` (2 —
+    a true XY matrix). The 1-D mutual-cap slider (one continuous sense row crossed
+    by N drive columns) reuses this builder with ``min_lines=1`` so a single sense
+    row is allowed; nothing else about the diamond/bridge geometry changes.
     """
     require_finite(p, TrackpadError)
     validate_support(p, TrackpadError)
     validate_sensing(p, TrackpadError)
     for field, val in (("num_rows", p.num_rows), ("num_cols", p.num_cols)):
-        if val < MIN_LINES:
-            raise TrackpadError(f"{field} must be >= {MIN_LINES} for a 2-D XY matrix, got {val}")
+        if val < min_lines:
+            raise TrackpadError(f"{field} must be >= {min_lines}, got {val}")
     for field, pval in (("panel_width", p.panel_width), ("panel_height", p.panel_height)):
         if pval is not None and pval <= 0:
             raise TrackpadError(f"{field} must be > 0 when set, got {pval}")

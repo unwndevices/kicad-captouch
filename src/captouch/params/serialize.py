@@ -14,21 +14,24 @@ import json
 from dataclasses import asdict, fields
 from typing import Union
 
+from .mutual_slider import MutualSliderParams
 from .slider import SliderParams
 from .trackpad import TrackpadParams
 from .wheel import WheelParams
 
-WidgetParams = Union[SliderParams, WheelParams, TrackpadParams]
+WidgetParams = Union[SliderParams, WheelParams, TrackpadParams, MutualSliderParams]
 
 _WIDGET_FOR_TYPE: dict[type, str] = {
     SliderParams: "slider",
     WheelParams: "wheel",
     TrackpadParams: "trackpad",
+    MutualSliderParams: "mutual-slider",
 }
 _TYPE_FOR_WIDGET: dict[str, type[WidgetParams]] = {
     "slider": SliderParams,
     "wheel": WheelParams,
     "trackpad": TrackpadParams,
+    "mutual-slider": MutualSliderParams,
 }
 
 

@@ -26,6 +26,7 @@ import math
 from dataclasses import dataclass, replace
 
 from ._validate import require_finite
+from .sensing import BOARD_THICKNESS, OVERLAY_ER, validate_sensing
 from .slider import FINGER_CONSTRAINT_TOL, SEGMENT_SHAPES, SliderError
 from .support import (
     GROUND_HATCH_PITCH,
@@ -97,6 +98,10 @@ class WheelParams:
     guard_ring, guard_width, guard_gap, guard_break, guard_mask_open:
         Optional, **default-off** board-level support copper. See
         :mod:`captouch.params.support`.
+    overlay_thickness, overlay_er, board_thickness:
+        Front-panel / board-stack context for the **advisory** checks only (never
+        drawn). ``overlay_thickness`` 0 (default) means "no overlay specified". See
+        :mod:`captouch.params.sensing` and :mod:`captouch.params.advisory`.
     """
 
     num_segments: int = 5
@@ -123,6 +128,11 @@ class WheelParams:
     guard_gap: float = GUARD_GAP
     guard_break: float = GUARD_BREAK
     guard_mask_open: bool = True
+
+    # -- overlay / board context for advisories (default: no overlay) ------- #
+    overlay_thickness: float = 0.0
+    overlay_er: float = OVERLAY_ER
+    board_thickness: float = BOARD_THICKNESS
 
     # -- resolved (derived) quantities ------------------------------------- #
     @property
@@ -210,6 +220,7 @@ def validate_wheel(p: WheelParams) -> WheelParams:
     """
     require_finite(p, WheelError)
     validate_support(p, WheelError)
+    validate_sensing(p, WheelError)
     if p.segment_shape not in SEGMENT_SHAPES:
         raise WheelError(f"segment_shape must be one of {SEGMENT_SHAPES}, got {p.segment_shape!r}")
     if p.num_segments < 3:

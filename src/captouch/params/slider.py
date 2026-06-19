@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from ._validate import require_finite
+from .sensing import BOARD_THICKNESS, OVERLAY_ER, validate_sensing
 from .support import (
     GROUND_HATCH_PITCH,
     GROUND_HATCH_WIDTH,
@@ -96,6 +97,11 @@ class SliderParams:
         Optional, **default-off** board-level support copper (a hatched ground
         pour on B.Cu and/or a grounded guard / ESD ring on F.Cu). See
         :mod:`captouch.params.support`.
+    overlay_thickness, overlay_er, board_thickness:
+        Front-panel / board-stack context for the **advisory** checks only (never
+        drawn). ``overlay_thickness`` 0 (default) means "no overlay specified" and
+        switches the overlay-dependent advisories off. See
+        :mod:`captouch.params.sensing` and :mod:`captouch.params.advisory`.
     """
 
     num_segments: int = 4
@@ -122,6 +128,11 @@ class SliderParams:
     guard_gap: float = GUARD_GAP
     guard_break: float = GUARD_BREAK
     guard_mask_open: bool = True
+
+    # -- overlay / board context for advisories (default: no overlay) ------- #
+    overlay_thickness: float = 0.0
+    overlay_er: float = OVERLAY_ER
+    board_thickness: float = BOARD_THICKNESS
 
     # -- resolved (derived) quantities ------------------------------------- #
     @property
@@ -187,6 +198,7 @@ def validate_slider(p: SliderParams) -> SliderParams:
     """
     require_finite(p, SliderError)
     validate_support(p, SliderError)
+    validate_sensing(p, SliderError)
     if p.segment_shape not in SEGMENT_SHAPES:
         raise SliderError(f"segment_shape must be one of {SEGMENT_SHAPES}, got {p.segment_shape!r}")
     if p.num_segments < 3:

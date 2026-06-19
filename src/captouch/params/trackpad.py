@@ -36,6 +36,7 @@ from dataclasses import dataclass, replace
 from typing import Any
 
 from ._validate import require_finite
+from .sensing import BOARD_THICKNESS, OVERLAY_ER, validate_sensing
 from .slider import SliderError
 from .support import (
     GROUND_HATCH_PITCH,
@@ -179,6 +180,10 @@ class TrackpadParams:
     guard_ring, guard_width, guard_gap, guard_break, guard_mask_open:
         Optional, **default-off** board-level support copper (the guard / ESD ring
         is most relevant to a trackpad — §4.6). See :mod:`captouch.params.support`.
+    overlay_thickness, overlay_er, board_thickness:
+        Front-panel / board-stack context for the **advisory** checks only (never
+        drawn). ``overlay_thickness`` 0 (default) means "no overlay specified". See
+        :mod:`captouch.params.sensing` and :mod:`captouch.params.advisory`.
     """
 
     num_rows: int = 4
@@ -207,6 +212,11 @@ class TrackpadParams:
     guard_gap: float = GUARD_GAP
     guard_break: float = GUARD_BREAK
     guard_mask_open: bool = True
+
+    # -- overlay / board context for advisories (default: no overlay) ------- #
+    overlay_thickness: float = 0.0
+    overlay_er: float = OVERLAY_ER
+    board_thickness: float = BOARD_THICKNESS
 
     # -- resolved (derived) quantities ------------------------------------- #
     @property
@@ -318,6 +328,7 @@ def validate_trackpad(p: TrackpadParams) -> TrackpadParams:
     """
     require_finite(p, TrackpadError)
     validate_support(p, TrackpadError)
+    validate_sensing(p, TrackpadError)
     for field, val in (("num_rows", p.num_rows), ("num_cols", p.num_cols)):
         if val < MIN_LINES:
             raise TrackpadError(f"{field} must be >= {MIN_LINES} for a 2-D XY matrix, got {val}")

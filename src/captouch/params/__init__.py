@@ -17,6 +17,12 @@ from .fab import (
     FabViolation,
     check_fab,
 )
+from .sensing import (
+    BOARD_THICKNESS,
+    OVERLAY_ER,
+    has_overlay,
+    validate_sensing,
+)
 from .serialize import (
     WidgetParams,
     params_from_dict,
@@ -84,6 +90,10 @@ __all__ = [
     "check_fab",
     "has_support",
     "validate_support",
+    "has_overlay",
+    "validate_sensing",
+    "OVERLAY_ER",
+    "BOARD_THICKNESS",
     "GROUND_HATCH_PITCH",
     "GROUND_HATCH_WIDTH",
     "GROUND_MARGIN",

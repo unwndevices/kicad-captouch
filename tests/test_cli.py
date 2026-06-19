@@ -448,3 +448,83 @@ def test_trackpad_overlay_too_thick_blocks_under_strict(tmp_path, capsys):
     assert rc == 3
     assert "trackpad maximum" in out
     assert not (tmp_path / "T.kicad_mod").exists()
+
+
+# --------------------------------------------------------------------------- #
+# keypad
+# --------------------------------------------------------------------------- #
+def test_keypad_default_writes_files_and_exits_zero(tmp_path, capsys):
+    rc = main(["keypad", "--out", str(tmp_path), "--name", "KP"])
+    assert rc == 0
+    assert (tmp_path / "KP.kicad_mod").exists()
+    assert (tmp_path / "KP.kicad_sym").exists()
+    out = capsys.readouterr().out
+    assert "keypad" in out and "560 Ω series resistor" in out  # self-cap series-R
+
+
+def test_keypad_shape_and_size_flags(tmp_path, capsys):
+    rc = main(
+        [
+            "keypad",
+            "--out",
+            str(tmp_path),
+            "--name",
+            "KP",
+            "--num-rows",
+            "2",
+            "--num-cols",
+            "4",
+            "--button-shape",
+            "circle",
+            "--button-size",
+            "12",
+        ]
+    )
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "circle keypad: 2x4 buttons (8 keys, 8 pins)" in out
+
+
+def test_keypad_list_presets(capsys):
+    rc = main(["keypad", "--list-presets"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "numeric" in out and "round" in out and "compact" in out
+
+
+def test_keypad_save_and_from_params_round_trip(tmp_path):
+    pj = tmp_path / "kp.json"
+    main(["keypad", "--out", str(tmp_path / "a"), "--preset", "round", "--save-params", str(pj)])
+    assert '"widget": "keypad"' in pj.read_text()
+    assert main(["from-params", str(pj), "--out", str(tmp_path / "b")]) == 0
+    a = tmp_path / "a" / "CT_Keypad_Round.kicad_mod"
+    b = tmp_path / "b" / "CT_Keypad_Round.kicad_mod"
+    assert a.read_text() == b.read_text()  # byte-identical round-trip
+
+
+def test_keypad_support_flags_emit_zones(tmp_path):
+    rc = main(["keypad", "--out", str(tmp_path), "--name", "KP", "--ground-hatch", "--guard-ring"])
+    assert rc == 0
+    assert _zones((tmp_path / "KP.kicad_mod").read_text()) == 2  # ground + guard
+
+
+def test_keypad_strict_blocks_on_overlay_sizing(tmp_path, capsys):
+    # A 5 mm button under a 2 mm overlay is below the 3×overlay minimum -> blocks.
+    rc = main(
+        [
+            "keypad",
+            "--out",
+            str(tmp_path),
+            "--name",
+            "KP",
+            "--button-size",
+            "5",
+            "--overlay-thickness",
+            "2",
+            "--strict",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert rc == 3
+    assert "refusing to generate" in out
+    assert not (tmp_path / "KP.kicad_mod").exists()

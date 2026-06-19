@@ -4,6 +4,7 @@
 ``captouch mutual-slider``  generates a mutual-cap (CSX) diamond slider footprint + symbol.
 ``captouch wheel``          generates a wheel (rotary slider) footprint + symbol.
 ``captouch trackpad``       generates a mutual-cap XY diamond trackpad footprint + symbol.
+``captouch keypad``         generates a discrete self-cap button-grid footprint + symbol.
 ``captouch gui``            launches the PySide6 live-preview app (needs the gui extra).
 ``captouch spike``          emits the Phase-0 format-spike pair (kept as a smoke test).
 """
@@ -18,6 +19,7 @@ from typing import Any
 from . import __version__
 from .export import footprint, symbol
 from .geometry import (
+    build_keypad,
     build_mutual_slider,
     build_slider,
     build_trackpad,
@@ -25,15 +27,18 @@ from .geometry import (
     net_tie_number,
 )
 from .params import (
+    BUTTON_SHAPES,
     CLIP_MODES,
     DEFAULT_PROFILE,
     DISABLE_AREA_FRACTION,
     FAB_PROFILES,
+    KEYPAD_PRESETS,
     MASK_SHAPES,
     MUTUAL_SLIDER_PRESETS,
     SLIDER_PRESETS,
     TRACKPAD_PRESETS,
     WHEEL_PRESETS,
+    KeypadParams,
     MutualSliderError,
     MutualSliderParams,
     SliderError,
@@ -835,6 +840,111 @@ def _add_trackpad_parser(sub: argparse._SubParsersAction) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# keypad
+# --------------------------------------------------------------------------- #
+def _keypad_params_from_args(args: argparse.Namespace) -> KeypadParams:
+    """Start from a preset (or defaults) and apply only explicitly-set flags."""
+    base = KEYPAD_PRESETS[args.preset] if args.preset else KeypadParams()
+
+    overrides: dict[str, Any] = {}
+    for flag, field in (
+        ("name", "name"),
+        ("num_rows", "num_rows"),
+        ("num_cols", "num_cols"),
+        ("button_shape", "button_shape"),
+        ("button_size", "button_size"),
+        ("gap", "gap"),
+        ("corner_radius", "corner_radius"),
+    ):
+        value = getattr(args, flag)
+        if value is not None:
+            overrides[field] = value
+    overrides.update(_support_overrides(args))
+    overrides.update(_sensing_overrides(args))
+    return replace(base, **overrides)
+
+
+def _keypad(args: argparse.Namespace) -> int:
+    if args.list_fab_profiles:
+        return _list_fab_profiles()
+    if args.list_presets:
+        for key, p in KEYPAD_PRESETS.items():
+            print(f"{key:10} {p.name}  ({p.num_rows}x{p.num_cols} {p.button_shape} buttons)")
+        return 0
+
+    try:
+        params = _keypad_params_from_args(args)
+        geo = build_keypad(params)
+    except SliderError as exc:  # KeypadError subclasses SliderError
+        print(f"error: {exc}")
+        return 2
+
+    violations = check_fab(params, args.fab_profile)
+    advisories = check_advisories(params)
+    if args.strict and _strict_blocks(violations, advisories):
+        _report_fab(violations, args.fab_profile, strict=True)
+        _report_advisories(advisories, strict=True)
+        return 3
+
+    args.out.mkdir(parents=True, exist_ok=True)
+    fp_path = args.out / f"{params.name}.kicad_mod"
+    sym_path = args.out / f"{params.name}.kicad_sym"
+    fp_path.write_text(footprint.keypad_footprint_text(geo), encoding="utf-8")
+    sym_path.write_text(symbol.keypad_symbol_lib_text(geo), encoding="utf-8")
+    _maybe_save_params(args, params)
+
+    print(f"wrote {fp_path}")
+    print(f"wrote {sym_path}")
+    print(
+        f"  {params.button_shape} keypad: {params.num_rows}x{params.num_cols} buttons "
+        f"({params.num_buttons} keys, {params.num_pins} pins), "
+        f"size={params.button_size:.2f} gap={params.gap:.2f} mm, "
+        f"extent {params.width:.2f} x {params.height:.2f} mm"
+    )
+    _report_support(geo)
+    _report_fab(violations, args.fab_profile, strict=False)
+    _report_advisories(advisories, strict=False)
+    return 0
+
+
+def _add_keypad_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser("keypad", help="generate a discrete self-cap button grid footprint + symbol")
+    p.add_argument(
+        "-o",
+        "--out",
+        type=Path,
+        default=Path("examples"),
+        help="output directory (default: ./examples)",
+    )
+    p.add_argument("--list-presets", action="store_true", help="list presets and exit")
+    p.add_argument("--preset", choices=sorted(KEYPAD_PRESETS), help="start from a vendor preset")
+    p.add_argument("--name", help="footprint/symbol base name")
+    p.add_argument("--num-rows", type=int, help="buttons down the grid (>= 1)")
+    p.add_argument("--num-cols", type=int, help="buttons across the grid (>= 1)")
+    p.add_argument(
+        "--button-shape", choices=BUTTON_SHAPES, help="per-button shape: rect / circle / diamond"
+    )
+    p.add_argument(
+        "--button-size",
+        type=float,
+        help="button dimension (mm): square side / circle diameter / diamond diagonal",
+    )
+    p.add_argument(
+        "--gap",
+        type=float,
+        help="button-to-button edge-to-edge separation (mm; default 4 = Microchip self-cap rule)",
+    )
+    p.add_argument("--corner-radius", type=float, help="ESD corner rounding for rect/diamond (mm)")
+    p.add_argument(
+        "--save-params", type=Path, metavar="FILE", help="also write the resolved params as JSON"
+    )
+    _add_support_args(p)
+    _add_sensing_args(p)
+    _add_fab_args(p)
+    p.set_defaults(func=_keypad)
+
+
+# --------------------------------------------------------------------------- #
 # from-params: regenerate from a saved JSON parameter set
 # --------------------------------------------------------------------------- #
 def _from_params(args: argparse.Namespace) -> int:
@@ -857,6 +967,10 @@ def _from_params(args: argparse.Namespace) -> int:
             mgeo = build_mutual_slider(params)
             fp_text = footprint.mutual_slider_footprint_text(mgeo)
             sym_text = symbol.mutual_slider_symbol_lib_text(mgeo)
+        elif isinstance(params, KeypadParams):
+            kgeo = build_keypad(params)
+            fp_text = footprint.keypad_footprint_text(kgeo)
+            sym_text = symbol.keypad_symbol_lib_text(kgeo)
         else:
             sgeo = build_slider(params)
             fp_text = footprint.slider_footprint_text(sgeo)
@@ -971,6 +1085,7 @@ def main(argv: list[str] | None = None) -> int:
     _add_mutual_slider_parser(sub)
     _add_wheel_parser(sub)
     _add_trackpad_parser(sub)
+    _add_keypad_parser(sub)
     _add_from_params_parser(sub)
     _add_gui_parser(sub)
     _add_spike_parser(sub)

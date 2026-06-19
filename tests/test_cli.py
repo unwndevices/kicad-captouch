@@ -528,3 +528,36 @@ def test_keypad_strict_blocks_on_overlay_sizing(tmp_path, capsys):
     assert rc == 3
     assert "refusing to generate" in out
     assert not (tmp_path / "KP.kicad_mod").exists()
+
+
+# --------------------------------------------------------------------------- #
+# --dxf flag (mechanical / CAD handoff)
+# --------------------------------------------------------------------------- #
+def test_slider_dxf_flag_writes_dxf(tmp_path, capsys):
+    rc = main(["slider", "--out", str(tmp_path), "--name", "S", "--dxf"])
+    assert rc == 0
+    dxf_path = tmp_path / "S.dxf"
+    assert dxf_path.exists()
+    assert "wrote " in capsys.readouterr().out
+    text = dxf_path.read_text()
+    assert text.startswith("0\nSECTION\n") and text.rstrip().endswith("EOF")
+
+
+def test_no_dxf_flag_writes_no_dxf(tmp_path):
+    rc = main(["wheel", "--out", str(tmp_path), "--name", "W"])
+    assert rc == 0
+    assert not (tmp_path / "W.dxf").exists()
+
+
+def test_keypad_dxf_flag_writes_dxf(tmp_path):
+    rc = main(["keypad", "--out", str(tmp_path), "--name", "KP", "--dxf"])
+    assert rc == 0
+    assert (tmp_path / "KP.dxf").exists()
+
+
+def test_from_params_dxf_flag_writes_dxf(tmp_path):
+    pj = tmp_path / "p.json"
+    assert main(["trackpad", "--out", str(tmp_path), "--name", "T", "--save-params", str(pj)]) == 0
+    regen = tmp_path / "regen"
+    assert main(["from-params", str(pj), "--out", str(regen), "--dxf"]) == 0
+    assert (regen / "T.dxf").exists()

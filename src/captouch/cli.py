@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
-from .export import footprint, symbol
+from .export import dxf, footprint, symbol
 from .geometry import (
     build_keypad,
     build_mutual_slider,
@@ -251,6 +251,26 @@ def _maybe_save_params(args: argparse.Namespace, params: WidgetParams) -> None:
         print(f"wrote {path}")
 
 
+def _maybe_write_dxf(args: argparse.Namespace, geo) -> None:
+    """Write a ``{name}.dxf`` mechanical drawing if ``--dxf`` was given."""
+    if getattr(args, "dxf", False):
+        path = args.out / f"{geo.params.name}.dxf"
+        dxf.write_widget_dxf(geo, path)
+        print(f"wrote {path}")
+
+
+def _add_output_args(p: argparse.ArgumentParser) -> None:
+    """Add the shared ``--save-params`` / ``--dxf`` extra-output flags."""
+    p.add_argument(
+        "--save-params", type=Path, metavar="FILE", help="also write the resolved params as JSON"
+    )
+    p.add_argument(
+        "--dxf",
+        action="store_true",
+        help="also write a DXF drawing (NAME.dxf) for mechanical / CAD handoff",
+    )
+
+
 # --------------------------------------------------------------------------- #
 # slider
 # --------------------------------------------------------------------------- #
@@ -317,6 +337,7 @@ def _slider(args: argparse.Namespace) -> int:
     fp_path.write_text(footprint.slider_footprint_text(geo), encoding="utf-8")
     sym_path.write_text(symbol.slider_symbol_lib_text(geo), encoding="utf-8")
     _maybe_save_params(args, params)
+    _maybe_write_dxf(args, geo)
 
     minx, miny, maxx, maxy = geo.bounds
     print(f"wrote {fp_path}")
@@ -375,9 +396,7 @@ def _add_slider_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument(
         "--relax-finger-constraint", action="store_true", help="skip the W+2A=finger check"
     )
-    p.add_argument(
-        "--save-params", type=Path, metavar="FILE", help="also write the resolved params as JSON"
-    )
+    _add_output_args(p)
     _add_support_args(p)
     _add_sensing_args(p)
     _add_fab_args(p)
@@ -445,6 +464,7 @@ def _mutual_slider(args: argparse.Namespace) -> int:
     fp_path.write_text(footprint.mutual_slider_footprint_text(geo), encoding="utf-8")
     sym_path.write_text(symbol.mutual_slider_symbol_lib_text(geo), encoding="utf-8")
     _maybe_save_params(args, params)
+    _maybe_write_dxf(args, geo)
 
     rows = "row" if params.sense_rows == 1 else "rows"
     print(f"wrote {fp_path}")
@@ -497,9 +517,7 @@ def _add_mutual_slider_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--bridge-width", type=float, help="F.Cu neck / B.Cu strap width (mm)")
     p.add_argument("--via-drill", type=float, help="bridge via finished hole diameter (mm)")
     p.add_argument("--via-diameter", type=float, help="bridge via outer copper diameter (mm)")
-    p.add_argument(
-        "--save-params", type=Path, metavar="FILE", help="also write the resolved params as JSON"
-    )
+    _add_output_args(p)
     _add_support_args(p)
     _add_sensing_args(p)
     _add_fab_args(p)
@@ -572,6 +590,7 @@ def _wheel(args: argparse.Namespace) -> int:
     fp_path.write_text(footprint.wheel_footprint_text(geo), encoding="utf-8")
     sym_path.write_text(symbol.wheel_symbol_lib_text(geo), encoding="utf-8")
     _maybe_save_params(args, params)
+    _maybe_write_dxf(args, geo)
 
     print(f"wrote {fp_path}")
     print(f"wrote {sym_path}")
@@ -631,9 +650,7 @@ def _add_wheel_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument(
         "--relax-finger-constraint", action="store_true", help="skip the W+2A=finger check"
     )
-    p.add_argument(
-        "--save-params", type=Path, metavar="FILE", help="also write the resolved params as JSON"
-    )
+    _add_output_args(p)
     _add_support_args(p)
     _add_sensing_args(p)
     _add_fab_args(p)
@@ -729,6 +746,7 @@ def _trackpad(args: argparse.Namespace) -> int:
     fp_path.write_text(footprint.trackpad_footprint_text(geo), encoding="utf-8")
     sym_path.write_text(symbol.trackpad_symbol_lib_text(geo), encoding="utf-8")
     _maybe_save_params(args, params)
+    _maybe_write_dxf(args, geo)
 
     print(f"wrote {fp_path}")
     print(f"wrote {sym_path}")
@@ -830,9 +848,7 @@ def _add_trackpad_parser(sub: argparse._SubParsersAction) -> None:
         help="circle mask radius (mm; with --mask-shape circle; "
         "default = inscribed 0.5·min(width,height))",
     )
-    p.add_argument(
-        "--save-params", type=Path, metavar="FILE", help="also write the resolved params as JSON"
-    )
+    _add_output_args(p)
     _add_support_args(p)
     _add_sensing_args(p)
     _add_fab_args(p)
@@ -892,6 +908,7 @@ def _keypad(args: argparse.Namespace) -> int:
     fp_path.write_text(footprint.keypad_footprint_text(geo), encoding="utf-8")
     sym_path.write_text(symbol.keypad_symbol_lib_text(geo), encoding="utf-8")
     _maybe_save_params(args, params)
+    _maybe_write_dxf(args, geo)
 
     print(f"wrote {fp_path}")
     print(f"wrote {sym_path}")
@@ -935,9 +952,7 @@ def _add_keypad_parser(sub: argparse._SubParsersAction) -> None:
         help="button-to-button edge-to-edge separation (mm; default 4 = Microchip self-cap rule)",
     )
     p.add_argument("--corner-radius", type=float, help="ESD corner rounding for rect/diamond (mm)")
-    p.add_argument(
-        "--save-params", type=Path, metavar="FILE", help="also write the resolved params as JSON"
-    )
+    _add_output_args(p)
     _add_support_args(p)
     _add_sensing_args(p)
     _add_fab_args(p)
@@ -956,25 +971,25 @@ def _from_params(args: argparse.Namespace) -> int:
 
     try:
         if isinstance(params, WheelParams):
-            wgeo = build_wheel(params)
-            fp_text = footprint.wheel_footprint_text(wgeo)
-            sym_text = symbol.wheel_symbol_lib_text(wgeo)
+            geo = build_wheel(params)
+            fp_text = footprint.wheel_footprint_text(geo)
+            sym_text = symbol.wheel_symbol_lib_text(geo)
         elif isinstance(params, TrackpadParams):
-            tgeo = build_trackpad(params)
-            fp_text = footprint.trackpad_footprint_text(tgeo)
-            sym_text = symbol.trackpad_symbol_lib_text(tgeo)
+            geo = build_trackpad(params)
+            fp_text = footprint.trackpad_footprint_text(geo)
+            sym_text = symbol.trackpad_symbol_lib_text(geo)
         elif isinstance(params, MutualSliderParams):
-            mgeo = build_mutual_slider(params)
-            fp_text = footprint.mutual_slider_footprint_text(mgeo)
-            sym_text = symbol.mutual_slider_symbol_lib_text(mgeo)
+            geo = build_mutual_slider(params)
+            fp_text = footprint.mutual_slider_footprint_text(geo)
+            sym_text = symbol.mutual_slider_symbol_lib_text(geo)
         elif isinstance(params, KeypadParams):
-            kgeo = build_keypad(params)
-            fp_text = footprint.keypad_footprint_text(kgeo)
-            sym_text = symbol.keypad_symbol_lib_text(kgeo)
+            geo = build_keypad(params)
+            fp_text = footprint.keypad_footprint_text(geo)
+            sym_text = symbol.keypad_symbol_lib_text(geo)
         else:
-            sgeo = build_slider(params)
-            fp_text = footprint.slider_footprint_text(sgeo)
-            sym_text = symbol.slider_symbol_lib_text(sgeo)
+            geo = build_slider(params)
+            fp_text = footprint.slider_footprint_text(geo)
+            sym_text = symbol.slider_symbol_lib_text(geo)
     except SliderError as exc:
         print(f"error: {exc}")
         return 2
@@ -993,6 +1008,7 @@ def _from_params(args: argparse.Namespace) -> int:
     sym_path.write_text(sym_text, encoding="utf-8")
     print(f"wrote {fp_path}")
     print(f"wrote {sym_path}")
+    _maybe_write_dxf(args, geo)
     _report_fab(violations, args.fab_profile, strict=False)
     _report_advisories(advisories, strict=False)
     return 0
@@ -1007,6 +1023,11 @@ def _add_from_params_parser(sub: argparse._SubParsersAction) -> None:
         type=Path,
         default=Path("examples"),
         help="output directory (default: ./examples)",
+    )
+    p.add_argument(
+        "--dxf",
+        action="store_true",
+        help="also write a DXF drawing (NAME.dxf) for mechanical / CAD handoff",
     )
     _add_fab_args(p)
     p.set_defaults(func=_from_params)

@@ -1,7 +1,7 @@
 # kicad-captouch
 
 A standalone, vendor-agnostic desktop tool that **parametrically generates capacitive-touch
-interface footprints** — sliders, wheels, and XY diamond pads — for KiCad, with a live visual
+interface footprints** — self- and mutual-cap sliders, wheels, and XY diamond pads — for KiCad, with a live visual
 preview. Each widget is emitted as a ready-to-use **footprint (`.kicad_mod`)** plus a matching
 **schematic symbol (`.kicad_sym`)**, written directly as KiCad S-expressions (no dependency on
 KiCad's in-flux scripting API).
@@ -13,10 +13,13 @@ roadmap, and the companion research in [`docs/`](docs).
 
 Sliders, wheels, **and XY diamond trackpads** are done, with a desktop GUI, **vendor-pinned presets**,
 **fab-rule guards**, and a **standalone binary**. The engine — `params` → `geometry` (Shapely) →
-`export` — generates three widgets:
+`export` — generates four widgets:
 
 - **Linear sliders** — a row of rectangular / chevron / interdigitated electrodes with grounded
   end-dummy segments.
+- **Mutual-cap (CSX) sliders** — a 1-D diamond strip: one continuous `F.Cu` Rx sense line spanning
+  N `B.Cu`-bridged Tx drive electrodes (the [trackpad](#generate-a-trackpad) topology collapsed to a
+  single sense row), so N nodes need only `N + 1` pins (Microchip AN2934 §2.4).
 - **Wheels (rotary sliders)** — the slider construction bent into a continuous annulus around a
   centre keep-out hole; the mean radius is derived from the pitch
   (`circumference = num_segments × (W + gap)`), arcs are tessellated to polylines (KiCad custom-pad
@@ -36,7 +39,7 @@ footprint plus a matching symbol whose pins map 1:1 to the pads, in the **KiCad 
 (footprint `version 20241229`, symbol lib `version 20241209`) that both KiCad 9 and 10 accept — all
 **DRC-clean** in KiCad 10 (the trackpad's via bridges verified connected via DRC, not just assumed).
 
-The **PySide6 GUI** wraps the same engine: a slider/wheel/trackpad selector swaps a parameter panel
+The **PySide6 GUI** wraps the same engine: a slider/wheel/trackpad/mutual-slider selector swaps a parameter panel
 (with vendor presets) that drives a live `QGraphicsView` preview (zoom/pan, layer toggles — including
 distinct `F.Cu`, `B.Cu`, and via layers for the trackpad) rendering the *same* geometry the exporters
 serialise — so the preview is byte-faithful to the exported copper — plus one-click export of the
@@ -86,6 +89,31 @@ the finger diameter unless given; `--relax-finger-constraint` waives the `W + 2A
 Chevron tooth-tips are acute and would otherwise etch to fab-resolution copper points, so they are
 rounded for ESD relief by `--tip-radius` (default 0.15 mm, chevron-only); `--corner-radius` adds
 extra rounding to every shape. Set `--tip-radius 0` to keep sharp tips.
+
+### Generate a mutual slider
+
+```sh
+# defaults: 5-node single-sense-line mutual-cap diamond slider
+captouch mutual-slider --out examples --name CT_MutualSlider
+
+# from a vendor preset, overriding the node count
+captouch mutual-slider --preset microchip --num-segments 6
+
+# or size from the target overall length instead of a node count
+captouch mutual-slider --length 80
+
+captouch mutual-slider --list-presets   # microchip / dual / compact
+captouch mutual-slider --help           # full parameter list
+```
+
+A **mutual-capacitance (CSX)** slider reads position from the mutual coupling at each drive×sense
+crossing. It is the trackpad's diamond/bridge construction collapsed to one sense row, so it reuses
+that engine and likewise needs **two copper layers**. Parameters: `--num-segments` (Tx drive
+electrodes = position nodes, ≥ 3); `--sense-rows {1,2}` (1 = a single `Rx` sense line, 2 = a dual-row
+layout for a stronger mutual signal — Infineon "Dual Solid Diamond"); `--diamond-pitch`,
+`--diamond-gap`, `--bridge-width`, `--via-drill` / `--via-diameter` (as for the trackpad). Pass
+`--length` to size the strip by its overall length (node count derived from the pitch). The symbol's
+pins are `Rx1` (sense) and `Tx1…TxN` (drive), and it records the **2 kΩ** mutual-cap series-R note.
 
 ### Generate a wheel
 

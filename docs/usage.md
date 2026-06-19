@@ -34,6 +34,7 @@ format is accepted by both).
 
 ```sh
 captouch slider                       # 4-segment chevron slider → ./examples
+captouch mutual-slider --num-segments 6   # 6-node mutual-cap (CSX) diamond slider
 captouch wheel  --preset st_rotary    # 5-segment rotary wheel
 captouch trackpad --num-rows 4 --num-cols 5   # 4×5 mutual-cap diamond pad
 captouch trackpad --panel-width 300 --panel-height 200  # or size from the overall pad
@@ -45,9 +46,9 @@ Each command writes two files into the output directory (default `./examples`):
 
 ## The CLI
 
-Three generator subcommands — `slider`, `wheel`, `trackpad` — plus `from-params`
-(regenerate from a saved parameter set) and `gui`. Run any with `--help` for the
-full parameter list.
+Four generator subcommands — `slider`, `mutual-slider`, `wheel`, `trackpad` — plus
+`from-params` (regenerate from a saved parameter set) and `gui`. Run any with
+`--help` for the full parameter list.
 
 ### Options shared by every generator
 
@@ -156,6 +157,32 @@ wrote examples/CT_Trackpad.kicad_sym
     - Tx7: 49% area remaining
 ```
 
+### Mutual slider
+
+```sh
+captouch mutual-slider --num-segments 6
+captouch mutual-slider --preset microchip
+captouch mutual-slider --preset dual          # dual-row, stronger mutual signal
+captouch mutual-slider --length 60            # size from an overall length
+```
+
+A **mutual-capacitance (CSX)** slider senses position from the mutual coupling at
+each drive×sense crossing instead of a per-segment self-capacitance. Geometrically
+it is a diamond [trackpad](#trackpad) collapsed to a single sense row: one
+continuous F.Cu **Rx** sense line spanning N B.Cu-bridged **Tx** drive electrodes,
+so an N-node slider needs only **N + 1 pins** (Microchip AN2934 §2.4, "a single Y
+line spans multiple X lines"). It therefore shares the trackpad's diamond, neck,
+and via-bridge mechanics — and, like the trackpad, needs **two copper layers**.
+
+Mutual-slider-specific: `--num-segments` (Tx drive electrodes = position nodes,
+≥ 3), `--sense-rows {1,2}` (1 = a single sense line; 2 = a dual-row layout for a
+stronger mutual signal, Infineon "Dual Solid Diamond"), `--diamond-pitch`,
+`--diamond-gap`, `--bridge-width`, `--via-drill`/`--via-diameter`. Or size the
+strip by its overall `--length` instead of `--num-segments` (see
+[Design from overall size](#design-from-overall-size)). The symbol records the
+**2 kΩ** mutual-cap series-R recommendation; the pins are `Rx1` (sense, left) and
+`Tx1…TxN` (drive, right).
+
 ### Design from overall size
 
 When you know the **overall size** the interface has to fit (an enclosure cutout,
@@ -164,15 +191,17 @@ the count from the pitch — the pitch is never stretched, so the elements stay 
 right size for the finger:
 
 ```sh
-captouch slider   --length 100                         # a 100 mm strip
-captouch wheel    --outer-diameter 50                  # a 50 mm wheel
+captouch slider        --length 100                    # a 100 mm strip
+captouch mutual-slider --length 80                     # an 80 mm mutual-cap strip
+captouch wheel         --outer-diameter 50             # a 50 mm wheel
 captouch trackpad --panel-width 300 --panel-height 200 # a 300×200 mm XY pad
 ```
 
-- **Slider** (`--length`) and **wheel** (`--outer-diameter`): the element count is
-  rounded to best match the target; the achieved length / diameter lands within
-  about half a pitch (slider) / one pitch (wheel) of the target and is printed on
-  generation. Each is mutually exclusive with `--num-segments`.
+- **Slider** / **mutual-slider** (`--length`) and **wheel** (`--outer-diameter`):
+  the element count is rounded to best match the target; the achieved length /
+  diameter lands within about half a pitch (sliders) / one pitch (wheel) of the
+  target and is printed on generation. Each is mutually exclusive with
+  `--num-segments`.
 - **Trackpad** (`--panel-width` / `--panel-height`, given together, mutually
   exclusive with `--num-rows`/`--num-cols`): the row/column counts are
   `round(dimension / pitch)`, and the **outline is pinned to exactly the requested
@@ -331,11 +360,14 @@ enforced as a hard error regardless of profile.)
 captouch gui            # or: captouch-gui
 ```
 
-- A **Widget** selector swaps the slider / wheel / trackpad parameter panel.
+- A **Widget** selector swaps the slider / wheel / trackpad / mutual-slider
+  parameter panel.
 - A **Preset** menu loads vendor starting points into the form.
 - Each panel has a **"Design from overall size"** checkbox (length / outer diameter
   / panel width×height) that derives the element count from the pitch and shows it
   live — the same sizing as the CLI `--length` / `--outer-diameter` / `--panel-*`.
+- The mutual-slider panel combines that length sizing with the diamond / bridge /
+  via knobs and a **sense rows** (1 single / 2 dual) control.
 - The trackpad panel has a **Mask** group — shape (rect / rrect / circle), a
   **clip mode** (inscribe / conform, active only for a curved mask), and a
   corner-radius (rrect) or radius (circle; *Auto* = inscribed) control — that
@@ -390,8 +422,8 @@ pads.
    they fill once placed on the board. See the
    [refill caveat](#validating-with-kicad-cli) if you script `kicad-cli`.
 
-The trackpad's Tx bridges live on `B.Cu`, so its board must have ≥2 copper layers;
-so does the hatched ground pour.
+The trackpad's and mutual slider's Tx bridges live on `B.Cu`, so their boards must
+have ≥2 copper layers; so does the hatched ground pour.
 
 ## Standalone binary
 

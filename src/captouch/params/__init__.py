@@ -23,6 +23,14 @@ from .fab import (
     FabViolation,
     check_fab,
 )
+from .keypad import (
+    BUTTON_GAP_MM,
+    BUTTON_SHAPES,
+    KEYPAD_PRESETS,
+    KeypadError,
+    KeypadParams,
+    validate_keypad,
+)
 from .mutual_slider import (
     MAX_SENSE_ROWS,
     MIN_SEGMENTS,
@@ -93,6 +101,12 @@ __all__ = [
     "MUTUAL_SLIDER_PRESETS",
     "MIN_SEGMENTS",
     "MAX_SENSE_ROWS",
+    "KeypadParams",
+    "KeypadError",
+    "validate_keypad",
+    "KEYPAD_PRESETS",
+    "BUTTON_SHAPES",
+    "BUTTON_GAP_MM",
     "WheelParams",
     "WheelError",
     "validate_wheel",

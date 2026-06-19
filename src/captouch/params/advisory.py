@@ -34,6 +34,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .keypad import BUTTON_GAP_MM, KeypadParams
 from .mutual_slider import MutualSliderParams
 from .sensing import has_overlay
 from .slider import SliderParams
@@ -52,6 +53,7 @@ __all__ = [
     "SERIES_R_MUTUAL",
     "TRACKPAD_OVERLAY_MIN_MM",
     "TRACKPAD_OVERLAY_MAX_MM",
+    "BUTTON_OVERLAY_SIZE_FACTOR",
 ]
 
 # -- physical / guideline constants ------------------------------------------ #
@@ -71,6 +73,9 @@ SERIES_R_MUTUAL = "2 kΩ"
 #: mutual needs ≥ 0.5 mm; touchpad max ~3 mm at 5th-gen sensitivity).
 TRACKPAD_OVERLAY_MIN_MM = 0.5
 TRACKPAD_OVERLAY_MAX_MM = 3.0
+#: A self-cap button electrode dimension should be at least this multiple of the
+#: overlay thickness (TI rule of thumb; guidelines §5.7).
+BUTTON_OVERLAY_SIZE_FACTOR = 3.0
 
 
 @dataclass(frozen=True)
@@ -87,7 +92,7 @@ class Advisory:
     blocks: bool = False
 
 
-WidgetParams = SliderParams | WheelParams | TrackpadParams | MutualSliderParams
+WidgetParams = SliderParams | WheelParams | TrackpadParams | MutualSliderParams | KeypadParams
 
 
 # --------------------------------------------------------------------------- #
@@ -179,6 +184,40 @@ def _overlay_sizing_advisory(
     )
 
 
+def _keypad_size_advisory(params: KeypadParams) -> Advisory | None:
+    """Self-cap button dimension vs ``3 × overlay`` (TI rule; §5.7)."""
+    need = BUTTON_OVERLAY_SIZE_FACTOR * params.overlay_thickness
+    if params.button_size >= need:
+        return None
+    return Advisory(
+        feature="button vs overlay sizing",
+        message=(
+            f"button size {params.button_size:.2f} mm is below the "
+            f"{BUTTON_OVERLAY_SIZE_FACTOR:.0f} × overlay minimum {need:.2f} mm "
+            f"(overlay {params.overlay_thickness:.2f} mm; TI rule of thumb, guidelines §5.7) — "
+            f"enlarge the button or thin the overlay so a finger fully couples to it"
+        ),
+        blocks=True,
+    )
+
+
+def _keypad_separation_advisory(params: KeypadParams) -> Advisory | None:
+    """Self-cap button separation vs ``4 mm + overlay`` (Microchip §1.2.2 / §5.3)."""
+    need = BUTTON_GAP_MM + params.overlay_thickness
+    if params.gap >= need:
+        return None
+    return Advisory(
+        feature="button separation",
+        message=(
+            f"button gap {params.gap:.2f} mm is below the {BUTTON_GAP_MM:.0f} mm + overlay "
+            f"minimum {need:.2f} mm (overlay {params.overlay_thickness:.2f} mm; Microchip "
+            f"AN2934 §1.2.2, guidelines §5.3) — widen the gap so a finger on one button "
+            f"does not couple into its neighbour"
+        ),
+        blocks=True,
+    )
+
+
 def _trackpad_overlay_advisory(params: TrackpadParams) -> Advisory | None:
     """Mutual-cap trackpad overlay thickness vs the ~0.5–3 mm window (§5.7)."""
     t = params.overlay_thickness
@@ -213,6 +252,16 @@ def _self_cap_advisories(
     return [a for a in out if a is not None]
 
 
+def _keypad_advisories(params: KeypadParams) -> list[Advisory]:
+    out: list[Advisory | None] = [_series_r_advisory(params)]
+    if has_overlay(params):
+        out.append(_keypad_size_advisory(params))
+        out.append(_keypad_separation_advisory(params))
+        out.append(_sensitivity_note(params))
+    out.append(_cp_advisory(params, params.button_area, CP_BUDGET_SELF_PF, "self-cap"))
+    return [a for a in out if a is not None]
+
+
 def _trackpad_advisories(params: TrackpadParams) -> list[Advisory]:
     # Worst-case channel: the longer electrode line (max of an Rx row's num_cols
     # diamonds and a Tx column's num_rows diamonds); diamond area = 2·d².
@@ -240,6 +289,8 @@ def check_advisories(params: WidgetParams) -> list[Advisory]:
         # A mutual-cap slider is electrically a 1-row trackpad; reuse the mutual
         # advisory treatment (2 kΩ series-R, mutual Cp budget, mutual overlay window).
         return _trackpad_advisories(params.to_trackpad())
+    if isinstance(params, KeypadParams):
+        return _keypad_advisories(params)
     if isinstance(params, WheelParams):
         return _self_cap_advisories(
             params, params.ring_width, "ring width", params.width * params.ring_width

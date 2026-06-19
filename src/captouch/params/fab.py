@@ -26,13 +26,14 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from .keypad import KeypadParams
 from .mutual_slider import MutualSliderParams
 from .slider import SliderParams
 from .trackpad import TrackpadParams
 from .wheel import WheelParams
 
 #: Every widget params type the fab guards accept.
-_WidgetParams = SliderParams | WheelParams | TrackpadParams | MutualSliderParams
+_WidgetParams = SliderParams | WheelParams | TrackpadParams | MutualSliderParams | KeypadParams
 
 __all__ = [
     "FabRules",
@@ -180,6 +181,12 @@ def _trackpad_features(p: TrackpadParams) -> list[_Feature]:
     ]
 
 
+def _keypad_features(p: KeypadParams) -> list[_Feature]:
+    # Discrete self-cap buttons: the only inter-electrode dimension is the
+    # button-to-button separation (one big clearance; no necks, vias, or tips).
+    return [("button-to-button gap", CLEARANCE, p.gap)]
+
+
 def _support_features(p: _WidgetParams) -> list[_Feature]:
     """Fab-critical copper widths from the optional support-copper features.
 
@@ -205,6 +212,8 @@ def fab_features(params: _WidgetParams) -> list[_Feature]:
         # A mutual slider's tightest features are the trackpad's (it is a 1-row
         # diamond matrix): diamond gap, neck pinch, bridge width, via drill/annular.
         base = _trackpad_features(params.to_trackpad())
+    elif isinstance(params, KeypadParams):
+        base = _keypad_features(params)
     elif isinstance(params, WheelParams):
         base = _wheel_features(params)
     elif isinstance(params, SliderParams):

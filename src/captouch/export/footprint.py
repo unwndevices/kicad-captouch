@@ -533,3 +533,15 @@ def trackpad_footprint(geo: TrackpadGeometry) -> list:
 def trackpad_footprint_text(geo: TrackpadGeometry) -> str:
     """Serialise a trackpad footprint to `.kicad_mod` text (trailing newline)."""
     return _serialize_footprint(trackpad_footprint(geo))
+
+
+# A mutual-cap slider is a 1-row trackpad (its geometry is a TrackpadGeometry), so
+# its footprint is emitted by the trackpad path; these aliases just read clearly.
+def mutual_slider_footprint(geo: TrackpadGeometry) -> list:
+    """Build a mutual-cap slider footprint node (see :func:`trackpad_footprint`)."""
+    return trackpad_footprint(geo)
+
+
+def mutual_slider_footprint_text(geo: TrackpadGeometry) -> str:
+    """Serialise a mutual-cap slider footprint to `.kicad_mod` text (trailing newline)."""
+    return trackpad_footprint_text(geo)

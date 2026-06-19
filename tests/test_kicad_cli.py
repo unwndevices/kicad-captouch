@@ -14,8 +14,14 @@ import pytest
 from _board import support_board_text, trackpad_net_map, widget_board_text
 
 from captouch.export import footprint, symbol
-from captouch.geometry import build_slider, build_support, build_trackpad, build_wheel
-from captouch.params import SliderParams, TrackpadParams, WheelParams
+from captouch.geometry import (
+    build_mutual_slider,
+    build_slider,
+    build_support,
+    build_trackpad,
+    build_wheel,
+)
+from captouch.params import MutualSliderParams, SliderParams, TrackpadParams, WheelParams
 
 KICAD_CLI = shutil.which("kicad-cli")
 pytestmark = pytest.mark.skipif(KICAD_CLI is None, reason="kicad-cli not installed")
@@ -298,6 +304,44 @@ def test_trackpad_bridges_required_for_connectivity(tmp_path):
     board.write_text(widget_board_text(stripped, nets=trackpad_net_map(stripped)))
     report = _drc(board, tmp_path / "nobridge.json")
     assert report["unconnected_items"], "expected unconnected Tx diamonds without bridges"
+
+
+# --------------------------------------------------------------------------- #
+# mutual-cap slider (a 1-row diamond matrix with via bridges)
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("segments,rows", [(3, 1), (5, 1), (6, 2)])
+def test_mutual_slider_drc_clean(segments, rows, tmp_path):
+    # Real nets per Rx/Tx line: an empty `violations` proves inter-net clearance
+    # (Rx sense line vs Tx drive copper, vias vs copper), and an empty
+    # `unconnected_items` proves the via bridges join each Tx drive electrode
+    # across the two layers over the single continuous sense row.
+    geo = build_mutual_slider(MutualSliderParams(name="MS", num_segments=segments, sense_rows=rows))
+    board = tmp_path / "board.kicad_pcb"
+    board.write_text(widget_board_text(geo, nets=trackpad_net_map(geo)))
+    report = _drc(board, tmp_path / "drc.json")
+    assert report["violations"] == [], report["violations"]
+    assert report["unconnected_items"] == [], report["unconnected_items"]
+
+
+def test_mutual_slider_footprint_renders(tmp_path):
+    geo = build_mutual_slider(MutualSliderParams(name="CT_MutualSlider", num_segments=5))
+    pretty = tmp_path / "lib.pretty"
+    pretty.mkdir()
+    (pretty / "CT_MutualSlider.kicad_mod").write_text(footprint.mutual_slider_footprint_text(geo))
+    svg_dir = tmp_path / "svg"
+    svg_dir.mkdir()
+    proc = _run(
+        "fp",
+        "export",
+        "svg",
+        "--footprint",
+        "CT_MutualSlider",
+        "--output",
+        str(svg_dir),
+        str(pretty),
+    )
+    assert proc.returncode == 0 and "Error" not in proc.stdout, proc.stdout + proc.stderr
+    assert (svg_dir / "CT_MutualSlider.svg").exists()
 
 
 # --------------------------------------------------------------------------- #

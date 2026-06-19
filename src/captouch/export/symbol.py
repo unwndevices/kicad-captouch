@@ -299,3 +299,19 @@ def trackpad_symbol_lib(geo: TrackpadGeometry) -> list:
 def trackpad_symbol_lib_text(geo: TrackpadGeometry) -> str:
     """Serialise a trackpad symbol library to `.kicad_sym` text (trailing newline)."""
     return widget_symbol_lib_text(geo)
+
+
+# A mutual-cap slider's symbol is the trackpad symbol (Rx sense pins left, Tx drive
+# pins right); its geometry is a TrackpadGeometry, so these aliases just read clearly.
+def mutual_slider_symbol(geo: TrackpadGeometry) -> list:
+    """Build a mutual-cap slider symbol (see :func:`widget_symbol`)."""
+    return widget_symbol(geo)
+
+
+def mutual_slider_symbol_lib(geo: TrackpadGeometry) -> list:
+    return _lib(widget_symbol(geo))
+
+
+def mutual_slider_symbol_lib_text(geo: TrackpadGeometry) -> str:
+    """Serialise a mutual-cap slider symbol library to `.kicad_sym` text (trailing newline)."""
+    return widget_symbol_lib_text(geo)

@@ -11,6 +11,7 @@ exported copper.
 from __future__ import annotations
 
 from ._base import Electrode
+from .mutual_slider import MutualSliderGeometry, build_mutual_slider
 from .slider import SliderGeometry, build_slider
 from .trackpad import TrackpadGeometry, TrackpadNet, Via, build_trackpad
 from .wheel import WheelGeometry, build_wheel
@@ -25,6 +26,8 @@ __all__ = [
     "TrackpadGeometry",
     "TrackpadNet",
     "Via",
+    "build_mutual_slider",
+    "MutualSliderGeometry",
     "Electrode",
     "SupportCopper",
     "build_support",

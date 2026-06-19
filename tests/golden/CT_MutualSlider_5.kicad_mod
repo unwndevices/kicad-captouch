@@ -1,0 +1,472 @@
+(footprint "CT_MutualSlider_5"
+	(version 20241229)
+	(generator "kicad-captouch")
+	(generator_version "0.1.0")
+	(layer "F.Cu")
+	(property "Reference" "REF**"
+		(at 0 -4.5 0)
+		(layer "F.SilkS")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Value" "CT_MutualSlider_5"
+		(at 0 4.5 0)
+		(layer "F.Fab")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(attr smd)
+	(fp_rect
+		(start -15 -3)
+		(end 15 3)
+		(stroke
+			(width 0.1)
+			(type default)
+		)
+		(fill no)
+		(layer "F.Fab")
+	)
+	(fp_rect
+		(start -15.25 -3.25)
+		(end 15.25 3.25)
+		(stroke
+			(width 0.05)
+			(type default)
+		)
+		(fill no)
+		(layer "F.CrtYd")
+	)
+	(pad "1" smd custom
+		(at -9 1.1464)
+		(size 0.5 0.5)
+		(layers "F.Cu")
+		(options
+			(clearance outline)
+			(anchor circle)
+		)
+		(primitives
+			(gr_poly
+				(pts
+					(xy -3.4536 -1.0464)
+					(xy -2.5464 -1.0464)
+					(xy 0 1.5)
+					(xy 2.5464 -1.0464)
+					(xy 3.4536 -1.0464)
+					(xy 6 1.5)
+					(xy 8.5464 -1.0464)
+					(xy 9.4536 -1.0464)
+					(xy 12 1.5)
+					(xy 14.5464 -1.0464)
+					(xy 15.4536 -1.0464)
+					(xy 18 1.5)
+					(xy 20.5464 -1.0464)
+					(xy 21.4536 -1.0464)
+					(xy 24 1.5)
+					(xy 24 -3.7928)
+					(xy 21.4536 -1.2464)
+					(xy 20.5464 -1.2464)
+					(xy 18 -3.7928)
+					(xy 15.4536 -1.2464)
+					(xy 14.5464 -1.2464)
+					(xy 12 -3.7928)
+					(xy 9.4536 -1.2464)
+					(xy 8.5464 -1.2464)
+					(xy 6 -3.7928)
+					(xy 3.4536 -1.2464)
+					(xy 2.5464 -1.2464)
+					(xy 0 -3.7928)
+					(xy -2.5464 -1.2464)
+					(xy -3.4536 -1.2464)
+					(xy -6 -3.7928)
+					(xy -6 1.5)
+				)
+				(width 0)
+				(fill yes)
+			)
+		)
+	)
+	(pad "2" smd custom
+		(at -12 -1.7286)
+		(size 0.5 0.5)
+		(layers "F.Cu")
+		(options
+			(clearance outline)
+			(anchor circle)
+		)
+		(primitives
+			(gr_poly
+				(pts
+					(xy 2.6464 -1.2714)
+					(xy -2.6464 -1.2714)
+					(xy 0 1.375)
+				)
+				(width 0)
+				(fill yes)
+			)
+		)
+	)
+	(pad "2" smd custom
+		(at -12 1.7286)
+		(size 0.5 0.5)
+		(layers "F.Cu")
+		(options
+			(clearance outline)
+			(anchor circle)
+		)
+		(primitives
+			(gr_poly
+				(pts
+					(xy 0 -1.375)
+					(xy -2.6464 1.2714)
+					(xy 2.6464 1.2714)
+				)
+				(width 0)
+				(fill yes)
+			)
+		)
+	)
+	(pad "2" smd custom
+		(at -12 0)
+		(size 0.5 0.5)
+		(layers "B.Cu")
+		(options
+			(clearance outline)
+			(anchor circle)
+		)
+		(primitives
+			(gr_poly
+				(pts
+					(xy -0.1 -1.2536)
+					(xy -0.1 1.2536)
+					(xy 0.1 1.2536)
+					(xy 0.1 -1.2536)
+				)
+				(width 0)
+				(fill yes)
+			)
+		)
+	)
+	(pad "2" thru_hole circle
+		(at -12 -0.9536)
+		(size 0.6 0.6)
+		(drill 0.3)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "2" thru_hole circle
+		(at -12 0.9536)
+		(size 0.6 0.6)
+		(drill 0.3)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "3" smd custom
+		(at -6 -1.7286)
+		(size 0.5 0.5)
+		(layers "F.Cu")
+		(options
+			(clearance outline)
+			(anchor circle)
+		)
+		(primitives
+			(gr_poly
+				(pts
+					(xy 2.6464 -1.2714)
+					(xy -2.6464 -1.2714)
+					(xy 0 1.375)
+				)
+				(width 0)
+				(fill yes)
+			)
+		)
+	)
+	(pad "3" smd custom
+		(at -6 1.7286)
+		(size 0.5 0.5)
+		(layers "F.Cu")
+		(options
+			(clearance outline)
+			(anchor circle)
+		)
+		(primitives
+			(gr_poly
+				(pts
+					(xy 0 -1.375)
+					(xy -2.6464 1.2714)
+					(xy 2.6464 1.2714)
+				)
+				(width 0)
+				(fill yes)
+			)
+		)
+	)
+	(pad "3" smd custom
+		(at -6 0)
+		(size 0.5 0.5)
+		(layers "B.Cu")
+		(options
+			(clearance outline)
+			(anchor circle)
+		)
+		(primitives
+			(gr_poly
+				(pts
+					(xy -0.1 -1.2536)
+					(xy -0.1 1.2536)
+					(xy 0.1 1.2536)
+					(xy 0.1 -1.2536)
+				)
+				(width 0)
+				(fill yes)
+			)
+		)
+	)
+	(pad "3" thru_hole circle
+		(at -6 -0.9536)
+		(size 0.6 0.6)
+		(drill 0.3)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "3" thru_hole circle
+		(at -6 0.9536)
+		(size 0.6 0.6)
+		(drill 0.3)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "4" smd custom
+		(at 0 -1.7286)
+		(size 0.5 0.5)
+		(layers "F.Cu")
+		(options
+			(clearance outline)
+			(anchor circle)
+		)
+		(primitives
+			(gr_poly
+				(pts
+					(xy 2.6464 -1.2714)
+					(xy -2.6464 -1.2714)
+					(xy 0 1.375)
+				)
+				(width 0)
+				(fill yes)
+			)
+		)
+	)
+	(pad "4" smd custom
+		(at 0 1.7286)
+		(size 0.5 0.5)
+		(layers "F.Cu")
+		(options
+			(clearance outline)
+			(anchor circle)
+		)
+		(primitives
+			(gr_poly
+				(pts
+					(xy 0 -1.375)
+					(xy -2.6464 1.2714)
+					(xy 2.6464 1.2714)
+				)
+				(width 0)
+				(fill yes)
+			)
+		)
+	)
+	(pad "4" smd custom
+		(at 0 0)
+		(size 0.5 0.5)
+		(layers "B.Cu")
+		(options
+			(clearance outline)
+			(anchor circle)
+		)
+		(primitives
+			(gr_poly
+				(pts
+					(xy -0.1 -1.2536)
+					(xy -0.1 1.2536)
+					(xy 0.1 1.2536)
+					(xy 0.1 -1.2536)
+				)
+				(width 0)
+				(fill yes)
+			)
+		)
+	)
+	(pad "4" thru_hole circle
+		(at 0 -0.9536)
+		(size 0.6 0.6)
+		(drill 0.3)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "4" thru_hole circle
+		(at 0 0.9536)
+		(size 0.6 0.6)
+		(drill 0.3)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "5" smd custom
+		(at 6 -1.7286)
+		(size 0.5 0.5)
+		(layers "F.Cu")
+		(options
+			(clearance outline)
+			(anchor circle)
+		)
+		(primitives
+			(gr_poly
+				(pts
+					(xy 2.6464 -1.2714)
+					(xy -2.6464 -1.2714)
+					(xy 0 1.375)
+				)
+				(width 0)
+				(fill yes)
+			)
+		)
+	)
+	(pad "5" smd custom
+		(at 6 1.7286)
+		(size 0.5 0.5)
+		(layers "F.Cu")
+		(options
+			(clearance outline)
+			(anchor circle)
+		)
+		(primitives
+			(gr_poly
+				(pts
+					(xy 0 -1.375)
+					(xy -2.6464 1.2714)
+					(xy 2.6464 1.2714)
+				)
+				(width 0)
+				(fill yes)
+			)
+		)
+	)
+	(pad "5" smd custom
+		(at 6 0)
+		(size 0.5 0.5)
+		(layers "B.Cu")
+		(options
+			(clearance outline)
+			(anchor circle)
+		)
+		(primitives
+			(gr_poly
+				(pts
+					(xy -0.1 -1.2536)
+					(xy -0.1 1.2536)
+					(xy 0.1 1.2536)
+					(xy 0.1 -1.2536)
+				)
+				(width 0)
+				(fill yes)
+			)
+		)
+	)
+	(pad "5" thru_hole circle
+		(at 6 -0.9536)
+		(size 0.6 0.6)
+		(drill 0.3)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "5" thru_hole circle
+		(at 6 0.9536)
+		(size 0.6 0.6)
+		(drill 0.3)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "6" smd custom
+		(at 12 -1.7286)
+		(size 0.5 0.5)
+		(layers "F.Cu")
+		(options
+			(clearance outline)
+			(anchor circle)
+		)
+		(primitives
+			(gr_poly
+				(pts
+					(xy 2.6464 -1.2714)
+					(xy -2.6464 -1.2714)
+					(xy 0 1.375)
+				)
+				(width 0)
+				(fill yes)
+			)
+		)
+	)
+	(pad "6" smd custom
+		(at 12 1.7286)
+		(size 0.5 0.5)
+		(layers "F.Cu")
+		(options
+			(clearance outline)
+			(anchor circle)
+		)
+		(primitives
+			(gr_poly
+				(pts
+					(xy 0 -1.375)
+					(xy -2.6464 1.2714)
+					(xy 2.6464 1.2714)
+				)
+				(width 0)
+				(fill yes)
+			)
+		)
+	)
+	(pad "6" smd custom
+		(at 12 0)
+		(size 0.5 0.5)
+		(layers "B.Cu")
+		(options
+			(clearance outline)
+			(anchor circle)
+		)
+		(primitives
+			(gr_poly
+				(pts
+					(xy -0.1 -1.2536)
+					(xy -0.1 1.2536)
+					(xy 0.1 1.2536)
+					(xy 0.1 -1.2536)
+				)
+				(width 0)
+				(fill yes)
+			)
+		)
+	)
+	(pad "6" thru_hole circle
+		(at 12 -0.9536)
+		(size 0.6 0.6)
+		(drill 0.3)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(pad "6" thru_hole circle
+		(at 12 0.9536)
+		(size 0.6 0.6)
+		(drill 0.3)
+		(layers "*.Cu" "*.Mask")
+		(remove_unused_layers no)
+	)
+	(embedded_fonts no)
+)

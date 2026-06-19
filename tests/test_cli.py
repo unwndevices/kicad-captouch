@@ -326,7 +326,80 @@ def test_trackpad_min_feature_tracks_fab_profile():
         guard_width=None,
         guard_gap=None,
         guard_break=None,
+        # overlay / sensitivity flags (all unset)
+        overlay_thickness=None,
+        overlay_er=None,
+        board_thickness=None,
     )
     for prof in ("default", "jlcpcb", "oshpark"):
         p = _trackpad_params_from_args(Namespace(fab_profile=prof, **unset))
         assert p.min_feature == FAB_PROFILES[prof].min_track_width
+
+
+# --------------------------------------------------------------------------- #
+# sensitivity / filtering advisories
+# --------------------------------------------------------------------------- #
+def test_series_r_advisory_always_in_output(tmp_path, capsys):
+    rc = main(["slider", "--out", str(tmp_path), "--name", "S"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "560 Ω series resistor" in out  # self-cap recommendation
+
+
+def test_overlay_thickness_flag_triggers_sizing_advisory(tmp_path, capsys):
+    rc = main(
+        [
+            "slider",
+            "--out",
+            str(tmp_path),
+            "--name",
+            "S",
+            "--segment-height",
+            "8",
+            "--overlay-thickness",
+            "2",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert rc == 0  # advisory, not a block
+    assert "below the finger + 2·overlay minimum" in out
+    assert (tmp_path / "S.kicad_mod").exists()
+
+
+def test_strict_blocks_on_blocking_advisory_and_writes_nothing(tmp_path, capsys):
+    rc = main(
+        [
+            "slider",
+            "--out",
+            str(tmp_path),
+            "--name",
+            "S",
+            "--segment-height",
+            "8",
+            "--overlay-thickness",
+            "2",
+            "--strict",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert rc == 3
+    assert "error:" in out and "refusing to generate" in out
+    assert not (tmp_path / "S.kicad_mod").exists()
+
+
+def test_strict_passes_when_advisories_are_informational_only(tmp_path):
+    # No overlay + a well-sized default slider: only the (non-blocking) series-R
+    # advisory, so --strict still succeeds.
+    rc = main(["slider", "--out", str(tmp_path), "--name", "S", "--strict"])
+    assert rc == 0
+    assert (tmp_path / "S.kicad_mod").exists()
+
+
+def test_trackpad_overlay_too_thick_blocks_under_strict(tmp_path, capsys):
+    rc = main(
+        ["trackpad", "--out", str(tmp_path), "--name", "T", "--overlay-thickness", "5", "--strict"]
+    )
+    out = capsys.readouterr().out
+    assert rc == 3
+    assert "trackpad maximum" in out
+    assert not (tmp_path / "T.kicad_mod").exists()

@@ -33,6 +33,7 @@ from .params import (
     WheelError,
     WheelParams,
     WidgetParams,
+    check_advisories,
     check_fab,
     params_from_json,
     params_to_json,
@@ -90,6 +91,62 @@ def _report_fab(violations, profile_key: str, *, strict: bool) -> None:
         print(
             "  refusing to generate under --strict — relax the geometry, pick a "
             "finer --fab-profile, or drop --strict"
+        )
+
+
+# --------------------------------------------------------------------------- #
+# sensitivity / filtering advisories (shared across slider / wheel / trackpad)
+# --------------------------------------------------------------------------- #
+def _add_sensing_args(p: argparse.ArgumentParser) -> None:
+    """Add the overlay / board-stack flags that feed the design advisories."""
+    g = p.add_argument_group("overlay / sensitivity (advisory only)")
+    g.add_argument(
+        "--overlay-thickness",
+        type=float,
+        help="front-panel overlay thickness (mm); enables the overlay sizing + "
+        "sensitivity advisories (0/unset = no overlay specified)",
+    )
+    g.add_argument(
+        "--overlay-er",
+        type=float,
+        help="overlay relative permittivity εr (acrylic ~3, glass ~8; guidelines §5.7)",
+    )
+    g.add_argument(
+        "--board-thickness",
+        type=float,
+        help="FR-4 substrate thickness (mm) used for the parasitic-Cp estimate (default 1.6)",
+    )
+
+
+def _sensing_overrides(args: argparse.Namespace) -> dict[str, Any]:
+    """Collect the overlay / board-stack field overrides from explicitly-set flags."""
+    overrides: dict[str, Any] = {}
+    for field in ("overlay_thickness", "overlay_er", "board_thickness"):
+        value = getattr(args, field)
+        if value is not None:
+            overrides[field] = value
+    return overrides
+
+
+def _strict_blocks(violations, advisories) -> bool:
+    """True if a ``--strict`` run should refuse: any fab issue or blocking advisory."""
+    return bool(violations) or any(a.blocks for a in advisories)
+
+
+def _report_advisories(advisories, *, strict: bool) -> None:
+    """Print the design advisories (informational, or errors under *strict*)."""
+    if not advisories:
+        return
+    has_block = any(a.blocks for a in advisories)
+    head = "error" if (strict and has_block) else "advisory"
+    print(f"{head}: {len(advisories)} design advisory(ies) (guidelines §§5.5/5.7/5.10):")
+    for a in advisories:
+        tag = " [blocks --strict]" if (strict and a.blocks) else ""
+        print(f"  - {a.message}{tag}")
+    if strict and has_block:
+        print(
+            "  refusing to generate under --strict — address the blocking "
+            "advisory(ies) above, or drop --strict"
         )
 
 
@@ -207,6 +264,7 @@ def _params_from_args(args: argparse.Namespace) -> SliderParams:
     if args.relax_finger_constraint:
         overrides["relax_finger_constraint"] = True
     overrides.update(_support_overrides(args))
+    overrides.update(_sensing_overrides(args))
 
     params = replace(base, **overrides)
     if args.length is not None:
@@ -232,8 +290,10 @@ def _slider(args: argparse.Namespace) -> int:
         return 2
 
     violations = check_fab(params, args.fab_profile)
-    if violations and args.strict:
+    advisories = check_advisories(params)
+    if args.strict and _strict_blocks(violations, advisories):
         _report_fab(violations, args.fab_profile, strict=True)
+        _report_advisories(advisories, strict=True)
         return 3
 
     args.out.mkdir(parents=True, exist_ok=True)
@@ -259,6 +319,7 @@ def _slider(args: argparse.Namespace) -> int:
         )
     _report_support(geo)
     _report_fab(violations, args.fab_profile, strict=False)
+    _report_advisories(advisories, strict=False)
     return 0
 
 
@@ -303,6 +364,7 @@ def _add_slider_parser(sub: argparse._SubParsersAction) -> None:
         "--save-params", type=Path, metavar="FILE", help="also write the resolved params as JSON"
     )
     _add_support_args(p)
+    _add_sensing_args(p)
     _add_fab_args(p)
     p.set_defaults(func=_slider)
 
@@ -335,6 +397,7 @@ def _wheel_params_from_args(args: argparse.Namespace) -> WheelParams:
     if args.relax_finger_constraint:
         overrides["relax_finger_constraint"] = True
     overrides.update(_support_overrides(args))
+    overrides.update(_sensing_overrides(args))
 
     params = replace(base, **overrides)
     if args.outer_diameter is not None:
@@ -360,8 +423,10 @@ def _wheel(args: argparse.Namespace) -> int:
         return 2
 
     violations = check_fab(params, args.fab_profile)
-    if violations and args.strict:
+    advisories = check_advisories(params)
+    if args.strict and _strict_blocks(violations, advisories):
         _report_fab(violations, args.fab_profile, strict=True)
+        _report_advisories(advisories, strict=True)
         return 3
 
     args.out.mkdir(parents=True, exist_ok=True)
@@ -386,6 +451,7 @@ def _wheel(args: argparse.Namespace) -> int:
         )
     _report_support(geo)
     _report_fab(violations, args.fab_profile, strict=False)
+    _report_advisories(advisories, strict=False)
     return 0
 
 
@@ -432,6 +498,7 @@ def _add_wheel_parser(sub: argparse._SubParsersAction) -> None:
         "--save-params", type=Path, metavar="FILE", help="also write the resolved params as JSON"
     )
     _add_support_args(p)
+    _add_sensing_args(p)
     _add_fab_args(p)
     p.set_defaults(func=_wheel)
 
@@ -470,6 +537,7 @@ def _trackpad_params_from_args(args: argparse.Namespace) -> TrackpadParams:
     # finest etchable feature, so a non-rect mask never produces sub-fab slivers.
     overrides["min_feature"] = FAB_PROFILES[args.fab_profile].min_track_width
     overrides.update(_support_overrides(args))
+    overrides.update(_sensing_overrides(args))
 
     if args.panel_width is not None or args.panel_height is not None:
         if args.panel_width is None or args.panel_height is None:
@@ -512,8 +580,10 @@ def _trackpad(args: argparse.Namespace) -> int:
         return 2
 
     violations = check_fab(params, args.fab_profile)
-    if violations and args.strict:
+    advisories = check_advisories(params)
+    if args.strict and _strict_blocks(violations, advisories):
         _report_fab(violations, args.fab_profile, strict=True)
+        _report_advisories(advisories, strict=True)
         return 3
 
     args.out.mkdir(parents=True, exist_ok=True)
@@ -535,6 +605,7 @@ def _trackpad(args: argparse.Namespace) -> int:
     _report_partial_channels(geo)
     _report_support(geo)
     _report_fab(violations, args.fab_profile, strict=False)
+    _report_advisories(advisories, strict=False)
     return 0
 
 
@@ -626,6 +697,7 @@ def _add_trackpad_parser(sub: argparse._SubParsersAction) -> None:
         "--save-params", type=Path, metavar="FILE", help="also write the resolved params as JSON"
     )
     _add_support_args(p)
+    _add_sensing_args(p)
     _add_fab_args(p)
     p.set_defaults(func=_trackpad)
 
@@ -658,8 +730,10 @@ def _from_params(args: argparse.Namespace) -> int:
         return 2
 
     violations = check_fab(params, args.fab_profile)
-    if violations and args.strict:
+    advisories = check_advisories(params)
+    if args.strict and _strict_blocks(violations, advisories):
         _report_fab(violations, args.fab_profile, strict=True)
+        _report_advisories(advisories, strict=True)
         return 3
 
     args.out.mkdir(parents=True, exist_ok=True)
@@ -670,6 +744,7 @@ def _from_params(args: argparse.Namespace) -> int:
     print(f"wrote {fp_path}")
     print(f"wrote {sym_path}")
     _report_fab(violations, args.fab_profile, strict=False)
+    _report_advisories(advisories, strict=False)
     return 0
 
 

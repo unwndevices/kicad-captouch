@@ -34,6 +34,15 @@
 				(hide yes)
 			)
 		)
+		(property "Series_R" "2 kΩ near MCU pin, mutual-cap (CSX) — RC/ESD filter (Infineon AN85951 §5.5)"
+			(at 0 -12.7 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
 		(symbol "CT_Trackpad_3x3_0_1"
 			(rectangle
 				(start -5.08 5.08)

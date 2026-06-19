@@ -34,6 +34,15 @@
 				(hide yes)
 			)
 		)
+		(property "Series_R" "560 Ω near MCU pin, self-cap (CSD) — RC/ESD filter (Infineon AN85951 §5.5)"
+			(at 0 -13.97 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
 		(symbol "CT_Slider_Rect_0_1"
 			(rectangle
 				(start -5.08 6.35)

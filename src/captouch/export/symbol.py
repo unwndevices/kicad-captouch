@@ -13,6 +13,7 @@ from typing import Union
 
 from .. import __version__, sexpr
 from ..geometry import SliderGeometry, TrackpadGeometry, WheelGeometry, net_tie_number
+from ..params import recommended_series_r
 from ..sexpr import Sym
 
 WidgetGeometry = Union[SliderGeometry, WheelGeometry, TrackpadGeometry]
@@ -81,8 +82,14 @@ def _symbol_node(
     right: list[tuple[str, str]],
     *,
     reference: str = "U",
+    series_r: str | None = None,
 ) -> list:
-    """Build a single multi-pin symbol; *left*/*right* are ``(number, name)``."""
+    """Build a single multi-pin symbol; *left*/*right* are ``(number, name)``.
+
+    *series_r*, when given, is recorded as a hidden ``Series_R`` property — the
+    recommended series-resistor note (Phase 9 advisory) travels with the symbol so
+    it is visible in the schematic's field/BOM view without cluttering the body.
+    """
     rows = max(len(left), len(right), 1)
     half_h = (rows - 1) / 2.0 * PIN_PITCH + PIN_PITCH
     x_end = BODY_HALF_WIDTH + PIN_LENGTH
@@ -96,6 +103,14 @@ def _symbol_node(
     body = [Sym("symbol"), f"{name}_0_1", _rectangle(BODY_HALF_WIDTH, half_h)]
     pin_unit = [Sym("symbol"), f"{name}_1_1", *pins]
 
+    props = [
+        _property("Reference", reference, (0, half_h + PIN_PITCH, 0)),
+        _property("Value", name, (0, -half_h - PIN_PITCH, 0)),
+        _property("Footprint", "", (0, -half_h - 2 * PIN_PITCH, 0), hide=True),
+    ]
+    if series_r is not None:
+        props.append(_property("Series_R", series_r, (0, -half_h - 3 * PIN_PITCH, 0), hide=True))
+
     return [
         Sym("symbol"),
         name,
@@ -103,9 +118,7 @@ def _symbol_node(
         [Sym("exclude_from_sim"), Sym("no")],
         [Sym("in_bom"), Sym("yes")],
         [Sym("on_board"), Sym("yes")],
-        _property("Reference", reference, (0, half_h + PIN_PITCH, 0)),
-        _property("Value", name, (0, -half_h - PIN_PITCH, 0)),
-        _property("Footprint", "", (0, -half_h - 2 * PIN_PITCH, 0), hide=True),
+        *props,
         body,
         pin_unit,
     ]
@@ -221,12 +234,18 @@ def widget_symbol(geo: WidgetGeometry) -> list:
     optional support copper is enabled, one extra ``GND`` pin (numbered to match
     the footprint's net-tie pad) is appended to the right column, keeping pins 1:1
     with pads.
+
+    The symbol also carries a hidden ``Series_R`` property recording the
+    recommended series resistor for the widget's sensing mode (Phase 9 advisory) —
+    guidance that rides along with the part without changing its pins or body.
     """
     left, right = geo.symbol_columns()
     tie = net_tie_number(geo)
     if tie is not None:
         right = [*right, (tie, "GND")]
-    return _symbol_node(geo.params.name, left, right)
+    r_value, r_mode = recommended_series_r(geo.params)
+    series_r = f"{r_value} near MCU pin, {r_mode} — RC/ESD filter (Infineon AN85951 §5.5)"
+    return _symbol_node(geo.params.name, left, right, series_r=series_r)
 
 
 def widget_symbol_lib(geo: WidgetGeometry) -> list:

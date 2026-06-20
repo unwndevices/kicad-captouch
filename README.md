@@ -223,6 +223,17 @@ amber banner plus a quieter info line.
 captouch slider --segment-height 8 --overlay-thickness 2   # warns: finger overhangs the electrode
 ```
 
+### Use inside KiCad (Action Plugin)
+
+Run the generator **from inside KiCad 9/10** as an IPC Action Plugin: drop the
+[`kicad-plugin/`](kicad-plugin/) bundle into KiCad's plugins folder, and the live-preview
+window gains an **Add to KiCad project** button that writes the designed widget's
+byte-identical footprint + symbol into the open project's `captouch` library and registers it —
+ready to place from KiCad's own *Add Footprint* / *Add Symbol* pickers (footprint and symbol can
+target different or global/personal libraries). The plugin uses the stable IPC API
+(`kicad-python`) only to find the open project; generation stays in the standalone engine. See
+[`kicad-plugin/README.md`](kicad-plugin/README.md) and [`docs/usage.md`](docs/usage.md#kicad-plugin-design-from-inside-kicad).
+
 ### Standalone binary
 
 For users without Python, PyInstaller freezes the CLI + GUI into one file:

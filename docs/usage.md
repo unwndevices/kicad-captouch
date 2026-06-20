@@ -479,6 +479,45 @@ pads.
 The trackpad's and mutual slider's Tx bridges live on `B.Cu`, so their boards must
 have ≥2 copper layers; so does the hatched ground pour.
 
+## KiCad plugin (design from inside KiCad)
+
+Instead of exporting files and registering libraries by hand, you can run the
+generator **from inside KiCad** as an [IPC Action Plugin](https://docs.kicad.org/kicad-python-main/).
+It opens the same live-preview window, and the **Add to KiCad project** button
+writes the chosen widget's footprint + symbol straight into the open project's
+library and registers it — ready to place with KiCad's own *Add Footprint* /
+*Add Symbol* pickers.
+
+**Install.** Copy the [`kicad-plugin/`](../kicad-plugin/) directory into KiCad's
+IPC plugins folder (Linux `~/.local/share/kicad/<version>/plugins/`, macOS/Windows
+`Documents/KiCad/<version>/plugins/`), enable the API in *Preferences → Plugins*,
+and restart. KiCad builds a virtualenv and installs the plugin's
+`requirements.txt` on first run; the toolbar button appears once that finishes. See
+[`kicad-plugin/README.md`](../kicad-plugin/README.md) for details.
+
+**Use.**
+
+1. Open your board, then **Tools → External Plugins → Capacitive-Touch Generator**
+   (or the toolbar button).
+2. Design a widget with the live preview, exactly as in the standalone GUI.
+3. **Add to KiCad project**. A dialog picks the destination — by default a
+   project-local `captouch` library (footprints in `captouch.pretty/`, symbols in
+   `captouch.kicad_sym`, referenced via `${KIPRJMOD}`). You can point the footprint
+   and symbol at **different** libraries, rename the library, or tick **global
+   library table** to install into a personal library shared across every project.
+4. In the PCB editor press <kbd>A</kbd> and pick `captouch:<name>` to place the
+   footprint; add the matching symbol from the `captouch` symbol library in the
+   schematic. (Several widgets accumulate in the one library; re-adding a same-named
+   part replaces it in place.)
+
+Why a library rather than dropping the footprint directly onto the board: KiCad's
+IPC API builds footprints item-by-item as protobuf and **cannot** ingest an
+existing `.kicad_mod`, so a direct auto-place would mean re-implementing the whole
+emitter against the API — forking the single source of truth, with uncertain
+support for the embedded zones and custom-polygon pads this tool emits. Installing
+the *real* generated files keeps the placed part byte-identical to every other
+frontend, and KiCad's picker does the placement.
+
 ## Standalone binary
 
 For users without Python, build a single self-contained executable with

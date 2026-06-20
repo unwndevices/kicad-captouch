@@ -18,9 +18,13 @@ from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QFileDialog,
+    QFormLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QPushButton,
     QScrollArea,
@@ -33,6 +37,7 @@ from .. import engine
 from ..export import dxf
 from ..geometry import KeypadGeometry, MutualSliderGeometry, TrackpadGeometry, WheelGeometry
 from ..geometry._base import GeometryError
+from ..kicad_plugin import library
 from ..params import (
     DEFAULT_PROFILE,
     FAB_PROFILES,
@@ -132,12 +137,107 @@ def _summary(geo: WidgetGeometry) -> str:
     )
 
 
+class _InstallDialog(QDialog):
+    """Choose where to install the generated footprint + symbol library.
+
+    Defaults to a project-local ``captouch`` library (the open project's
+    directory). The footprint ``.pretty`` and symbol ``.kicad_sym`` are independent
+    paths, so they may be sent to different libraries; ticking *global* registers in
+    KiCad's user-wide tables instead of the project's, for a personal library shared
+    across projects.
+    """
+
+    def __init__(self, parent: QWidget, *, project_dir: Path, name: str) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Add to KiCad project")
+        self._project_dir = project_dir
+        self._fp_edited = False
+        self._sym_edited = False
+
+        nick = library.DEFAULT_NICKNAME
+        self._nick = QLineEdit(nick)
+        self._fp = QLineEdit(str(project_dir / f"{nick}.pretty"))
+        self._sym = QLineEdit(str(project_dir / f"{nick}.kicad_sym"))
+        self._global = QCheckBox("Register for all projects (global library table)")
+        self._nick.textChanged.connect(self._on_nick_changed)
+        self._fp.textEdited.connect(lambda _: setattr(self, "_fp_edited", True))
+        self._sym.textEdited.connect(lambda _: setattr(self, "_sym_edited", True))
+
+        form = QFormLayout()
+        form.addRow("Library nickname:", self._nick)
+        form.addRow("Footprint library (.pretty):", self._path_row(self._fp, self._browse_fp))
+        form.addRow("Symbol library (.kicad_sym):", self._path_row(self._sym, self._browse_sym))
+        form.addRow("", self._global)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        hint = QLabel(f"Installs “{name}” so KiCad's Add Footprint / Add Symbol can place it.")
+        hint.setWordWrap(True)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(hint)
+        layout.addWidget(buttons)
+
+    def _path_row(self, edit: QLineEdit, browse) -> QWidget:
+        row = QWidget()
+        h = QHBoxLayout(row)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.addWidget(edit, 1)
+        btn = QPushButton("Browse…")
+        btn.clicked.connect(browse)
+        h.addWidget(btn)
+        return row
+
+    def _on_nick_changed(self, text: str) -> None:
+        """Track the nickname in the path defaults until the user edits them."""
+        nick = text.strip() or library.DEFAULT_NICKNAME
+        if not self._fp_edited:
+            self._fp.setText(str(self._project_dir / f"{nick}.pretty"))
+        if not self._sym_edited:
+            self._sym.setText(str(self._project_dir / f"{nick}.kicad_sym"))
+
+    def _browse_fp(self) -> None:
+        start = self._fp.text() or str(self._project_dir)
+        chosen = QFileDialog.getExistingDirectory(self, "Footprint library (.pretty)", start)
+        if chosen:
+            self._fp.setText(chosen)
+            self._fp_edited = True
+
+    def _browse_sym(self) -> None:
+        start = self._sym.text() or str(self._project_dir)
+        chosen, _ = QFileDialog.getSaveFileName(
+            self, "Symbol library", start, "KiCad symbol library (*.kicad_sym)"
+        )
+        if chosen:
+            self._sym.setText(chosen)
+            self._sym_edited = True
+
+    def target(self) -> library.LibraryTarget:
+        """Build the chosen :class:`~captouch.kicad_plugin.library.LibraryTarget`."""
+        scope = "global" if self._global.isChecked() else "project"
+        return library.make_target(
+            nickname=self._nick.text().strip() or library.DEFAULT_NICKNAME,
+            fp_dir=Path(self._fp.text()).expanduser(),
+            sym_path=Path(self._sym.text()).expanduser(),
+            scope=scope,
+            project_dir=self._project_dir,
+        )
+
+
 class MainWindow(QMainWindow):
     """Top-level window hosting the parameter panel and the live preview."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, project_dir: Path | None = None) -> None:
         super().__init__()
         self.setWindowTitle("kicad-captouch")
+        # When launched as a KiCad IPC plugin, this is the open board's project
+        # directory; it switches on the "Add to KiCad project" install action.
+        self._project_dir = Path(project_dir) if project_dir is not None else None
         self._geo: WidgetGeometry | None = None
 
         self._panels = [factory() for _, factory in _WIDGETS]
@@ -264,6 +364,14 @@ class MainWindow(QMainWindow):
         self._dxf_btn = QPushButton("Export DXF…")
         self._dxf_btn.clicked.connect(self._on_export_dxf)
         bar.addWidget(self._dxf_btn)
+        # Only when running as a KiCad plugin: install straight into the open
+        # project's library so KiCad's Add Footprint picker can place the part.
+        self._install_btn: QPushButton | None = None
+        if self._project_dir is not None:
+            self._install_btn = QPushButton("Add to KiCad project…")
+            self._install_btn.setDefault(True)
+            self._install_btn.clicked.connect(self._on_install)
+            bar.addWidget(self._install_btn)
         return bar
 
     # -- behaviour ---------------------------------------------------------- #
@@ -280,8 +388,7 @@ class MainWindow(QMainWindow):
             self._status.setStyleSheet(_ERR_STYLE)
             self._status.setText(f"⚠ {exc}")
             self.panel.show_error(str(exc))  # outline the field(s) the error names
-            self._export_btn.setEnabled(self._geo is not None)
-            self._dxf_btn.setEnabled(self._geo is not None)
+            self._set_actions_enabled(self._geo is not None)
             self._fab_banner.setVisible(False)
             self._advice_line.setVisible(False)
             return
@@ -289,11 +396,17 @@ class MainWindow(QMainWindow):
         self.panel.clear_error()
         self._geo = geo
         self.preview.set_geometry(geo)
-        self._export_btn.setEnabled(True)
-        self._dxf_btn.setEnabled(True)
+        self._set_actions_enabled(True)
         self._status.setStyleSheet(_OK_STYLE)
         self._status.setText(_summary(geo))
         self._update_advice(geo)
+
+    def _set_actions_enabled(self, on: bool) -> None:
+        """Enable/disable the export + install actions together (valid geometry?)."""
+        self._export_btn.setEnabled(on)
+        self._dxf_btn.setEnabled(on)
+        if self._install_btn is not None:
+            self._install_btn.setEnabled(on)
 
     def _update_advice(self, geo: WidgetGeometry) -> None:
         """Refresh the warning banner + info line from fab checks and advisories.
@@ -383,6 +496,36 @@ class MainWindow(QMainWindow):
         self._status.setStyleSheet(_OK_STYLE)
         self._status.setText(f"Exported DXF → {path}")
 
+    # -- install into a KiCad project (plugin mode) ------------------------- #
+    def install_current(self, target: library.LibraryTarget) -> library.InstallResult:
+        """Install the on-screen geometry into *target*, updating the status line.
+
+        The written footprint + symbol are byte-identical to the preview (and to a
+        standalone export). Raises if there is no valid geometry.
+        """
+        if self._geo is None:
+            raise RuntimeError("no valid geometry to install")
+        res = library.install(self._geo, target)
+        note = "registered" if res.fp_registered else "already registered"
+        self._status.setStyleSheet(_OK_STYLE)
+        self._status.setText(
+            f"Added {res.fp_id} ({note}) — in the PCB editor press A and pick "
+            f"'{res.fp_id}'; the symbol is in library '{res.nickname}'"
+        )
+        return res
+
+    def _on_install(self) -> None:
+        if self._geo is None or self._project_dir is None:
+            return
+        dlg = _InstallDialog(self, project_dir=self._project_dir, name=self._geo.params.name)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        try:
+            self.install_current(dlg.target())
+        except (library.LibraryError, OSError, RuntimeError) as exc:
+            self._status.setStyleSheet(_ERR_STYLE)
+            self._status.setText(f"⚠ could not add to KiCad project: {exc}")
+
     def _on_save_image(self) -> None:
         if self._geo is None:
             return
@@ -444,17 +587,21 @@ class MainWindow(QMainWindow):
         self.load_params(p)
 
 
-def run(argv: list[str] | None = None) -> int:
-    """Create the application (if needed), show the window, and run the loop."""
+def run(argv: list[str] | None = None, *, project_dir: Path | None = None) -> int:
+    """Create the application (if needed), show the window, and run the loop.
+
+    *project_dir* (set by the KiCad plugin) enables the in-app "Add to KiCad
+    project" install action targeting that project's library.
+    """
     app = QApplication.instance() or QApplication(argv if argv is not None else sys.argv)
-    window = MainWindow()
+    window = MainWindow(project_dir=project_dir)
     window.show()
     return app.exec()
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, project_dir: Path | None = None) -> int:
     """Console-script entry point."""
-    return run(argv)
+    return run(argv, project_dir=project_dir)
 
 
 if __name__ == "__main__":

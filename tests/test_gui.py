@@ -917,3 +917,56 @@ def test_export_dxf_without_geometry_raises(qapp, tmp_path):
     win._geo = None
     with pytest.raises(RuntimeError):
         win.write_dxf(tmp_path / "x.dxf")
+
+
+# --------------------------------------------------------------------------- #
+# install into a KiCad project (plugin mode)
+# --------------------------------------------------------------------------- #
+def test_install_button_absent_without_project_dir(qapp):
+    from captouch.gui.app import MainWindow
+
+    win = MainWindow()
+    assert win._install_btn is None  # normal GUI: no plugin install action
+
+
+def test_install_button_present_in_plugin_mode(qapp, tmp_path):
+    from captouch.gui.app import MainWindow
+
+    win = MainWindow(project_dir=tmp_path)
+    assert win._install_btn is not None
+    assert win._install_btn.isEnabled()  # default slider builds valid geometry
+
+
+def test_install_current_writes_byte_identical_library(qapp, tmp_path):
+    from captouch import engine
+    from captouch.gui.app import MainWindow
+    from captouch.kicad_plugin import library
+
+    win = MainWindow(project_dir=tmp_path)
+    win.panel.set_params(SliderParams(name="CT_Slider"))
+    win._rebuild()
+
+    res = win.install_current(library.project_target(tmp_path))
+
+    fp_text, sym_text = engine.export_widget(win.preview.geometry_model)
+    assert res.fp_path.read_text() == fp_text
+    assert res.sym_path.read_text() == sym_text
+    assert res.fp_id == "captouch:CT_Slider"
+    assert (tmp_path / "fp-lib-table").exists()
+    assert (tmp_path / "sym-lib-table").exists()
+
+
+def test_install_dialog_target_honours_split_locations(qapp, tmp_path):
+    from captouch.gui.app import MainWindow, _InstallDialog
+
+    parent = MainWindow(project_dir=tmp_path)  # kept referenced so Qt won't GC the dialog
+    dlg = _InstallDialog(parent, project_dir=tmp_path, name="CT_Slider")
+    dlg._nick.setText("touch")
+    # The nickname change propagates to the not-yet-edited path defaults.
+    assert dlg._fp.text().endswith("touch.pretty")
+    assert dlg._sym.text().endswith("touch.kicad_sym")
+
+    target = dlg.target()
+    assert target.nickname == "touch"
+    assert target.fp_uri == "${KIPRJMOD}/touch.pretty"
+    assert target.sym_uri == "${KIPRJMOD}/touch.kicad_sym"

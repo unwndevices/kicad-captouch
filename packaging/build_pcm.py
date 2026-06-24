@@ -36,8 +36,11 @@ import zipfile
 from pathlib import Path
 
 # Reverse-DNS package identifier; matches the IPC manifest's identifier and the
-# managed-venv directory name. Valid under the schema's identifier pattern.
-IDENTIFIER = "org.kicad-captouch.generator"
+# managed-venv directory name. Must satisfy three rules at once: the PCM schema
+# pattern, the IPC api/schemas/v1 pattern, and KiCad's stricter C++ check
+# (API_PLUGIN::IsValidIdentifier wants a word.word.word run — and \w excludes
+# hyphens, so the hyphen must sit only in the trailing GitHub-repo segment).
+IDENTIFIER = "com.github.unwndevices.kicad-captouch"
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent

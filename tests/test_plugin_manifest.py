@@ -10,6 +10,7 @@ directory, and the ``--project-dir`` dispatch — behaves.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,13 @@ MANIFEST = BUNDLE / "plugin.json"
 _VALID_SCOPES = {"pcb", "schematic", "footprint", "symbol", "project_manager"}
 _PLUGIN_REQUIRED = {"identifier", "name", "description", "runtime", "actions"}
 _ACTION_REQUIRED = {"identifier", "name", "description", "entrypoint"}
+
+# KiCad's loader applies a second, stricter check on the identifier *beyond* the JSON
+# schema (API_PLUGIN::IsValidIdentifier): it must contain a reverse-DNS run of
+# word.word.word. Crucially \w excludes '-', so a hyphen may appear only in a trailing
+# segment. An identifier can pass schema validation and still be rejected at load with
+# "identifier ... does not meet requirements" — this rule is what actually gates loading.
+_KICAD_IDENTIFIER_RULE = re.compile(r"[\w\d]{2,}\.[\w\d]+\.[\w\d]+")
 
 
 @pytest.fixture(scope="module")
@@ -47,6 +55,12 @@ def test_action_fields_and_scopes_are_valid(manifest):
     assert _ACTION_REQUIRED <= set(action)
     assert set(action["scopes"]) <= _VALID_SCOPES
     assert "pcb" in action["scopes"]  # this plugin places into the PCB
+
+
+def test_identifier_meets_kicad_loader_requirements(manifest):
+    # Regression guard for #1: org.kicad-captouch.generator passed the schema but the
+    # hyphen in its middle segment failed IsValidIdentifier, so the plugin never loaded.
+    assert _KICAD_IDENTIFIER_RULE.search(manifest["identifier"]), manifest["identifier"]
 
 
 def test_referenced_files_exist(manifest):

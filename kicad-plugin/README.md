@@ -72,7 +72,7 @@ this poorly by default, so make it talk:
   - Windows: `set KICAD_ALLOC_CONSOLE=1 & set KICAD_ENABLE_WXTRACE=1 & set WXTRACE=KICAD_API & "C:\Program Files\KiCad\10.0\bin\kicad.exe"`
   - Linux / macOS: `KICAD_ENABLE_WXTRACE=1 WXTRACE=KICAD_API kicad`
 - **Inspect or reset the venv.** The plugin's managed environment lives at
-  `<KiCad cache>/python-environments/org.kicad-captouch.generator` — Windows
+  `<KiCad cache>/python-environments/com.github.unwndevices.kicad-captouch` — Windows
   `%LOCALAPPDATA%\KiCad\<version>\python-environments\…`, Linux
   `~/.cache/KiCad/<version>/…`, macOS `~/Library/Caches/KiCad/<version>/…`. Its pip
   log shows what failed. **Delete this folder and restart KiCad** to force a clean

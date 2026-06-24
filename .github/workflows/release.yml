@@ -11,6 +11,14 @@ name: release
 # One-time setup: enable Pages with "GitHub Actions" as the source
 # (Settings → Pages). The PCM package download_url points at the release asset,
 # so Pages is deployed after the release is published.
+#
+# Because this workflow is tag-triggered, the auto-created `github-pages`
+# environment must also allow tag deployments — its default policy permits only
+# the default branch, which rejects `v*` tags ("Tag … is not allowed to deploy").
+# Add a `v*` tag rule under Settings → Environments → github-pages → Deployment
+# branches and tags (or via the API):
+#   gh api -X POST repos/<owner>/<repo>/environments/github-pages/deployment-branch-policies \
+#     -f name='v*' -f type='tag'
 on:
   push:
     tags: ["v*"]

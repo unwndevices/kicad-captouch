@@ -1,11 +1,11 @@
 name: build-binaries
 
 # Build the standalone `captouch` binary on each OS. PyInstaller cannot
-# cross-compile, so every target builds on its own runner. Triggered on version
-# tags (release artifacts), on demand, and on PRs that touch packaging.
+# cross-compile, so every target builds on its own runner. Runs on demand and on
+# PRs that touch packaging; release.yml calls it (workflow_call) on version tags,
+# so it does NOT trigger on tags itself — that would build the binaries twice.
 on:
-  push:
-    tags: ["v*"]
+  workflow_call:
   workflow_dispatch:
   pull_request:
     paths:

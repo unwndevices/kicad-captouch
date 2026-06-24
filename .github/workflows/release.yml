@@ -1,0 +1,122 @@
+name: release
+
+# Cut a release on a version tag (vX.Y.Z):
+#   1. build the standalone binaries (reuses build.yml across Linux/macOS/Windows);
+#   2. build the KiCad PCM package + repository index (packaging/build_pcm.py);
+#   3. publish the PCM package and the binaries as GitHub Release assets;
+#   4. deploy the PCM repository index to GitHub Pages, so users can add
+#      https://<owner>.github.io/<repo>/repository.json as a PCM repository URL
+#      and get the plugin plus automatic update notifications.
+#
+# One-time setup: enable Pages with "GitHub Actions" as the source
+# (Settings → Pages). The PCM package download_url points at the release asset,
+# so Pages is deployed after the release is published.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build the release for, e.g. v0.1.0"
+        required: true
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  binaries:
+    # Reuse the standalone-binary matrix; its artifacts become release assets.
+    uses: ./.github/workflows/build.yml
+
+  pcm:
+    name: build PCM package
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.ver.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install builder deps
+        run: python -m pip install --upgrade pip jsonschema
+
+      - name: Resolve version + tag
+        id: ver
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build PCM package + repository index
+        run: |
+          python packaging/build_pcm.py \
+            --version "${{ steps.ver.outputs.version }}" \
+            --tag "${{ steps.ver.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --outdir dist \
+            --timestamp "$(date +%s)"
+
+      - name: Upload PCM package
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcm-package
+          path: dist/kicad-captouch-pcm-*.zip
+          if-no-files-found: error
+
+      - name: Upload Pages index
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/repo
+
+  release:
+    name: publish release
+    needs: [binaries, pcm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect release assets
+        run: |
+          mkdir -p release
+          cp artifacts/pcm-package/kicad-captouch-pcm-*.zip release/
+          cp artifacts/captouch-ubuntu-latest/captouch       release/captouch-linux-x86_64
+          cp artifacts/captouch-macos-latest/captouch        release/captouch-macos
+          cp artifacts/captouch-windows-latest/captouch.exe  release/captouch-windows.exe
+          ls -la release
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.pcm.outputs.tag }}
+          files: release/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+
+  pages:
+    name: deploy PCM repository to Pages
+    # After the release: the repository index advertises the release-asset URL,
+    # which only resolves once the release is published.
+    needs: [release]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
